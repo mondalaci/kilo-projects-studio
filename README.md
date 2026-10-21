@@ -17,9 +17,11 @@ conversations:
   changes of the active project's repository as a flat list of file paths,
   grouped into *Staged Changes* and *Changes*, the way VS Code's Source Control
   view does.
-- **Diffs** — clicking a file in that panel opens its unified diff in the editor
-  area, with split (side-by-side) and unified views, line numbers, syntax
-  highlighting and `+n −m` statistics.
+- **Diffs** — clicking a file in that panel opens it in the editor area: the
+  whole file on both sides, split or unified, with line numbers, syntax
+  highlighting, `+n −m` statistics, a change map down the right edge and change
+  bars in the gutter. Clicking an image in a conversation enlarges it to the
+  window, and clicking again returns it.
 - **Conversation state dots** — every project row carries a dot for its newest
   conversation: red blocked, amber working, green done and not yet opened, grey
   idle.
@@ -132,9 +134,13 @@ src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
     FilterBar.vue         The in-place sidebar filters (Ctrl+R, Ctrl+P)
     WindowControls.vue    Minimize / maximize / close for the frameless window
     WindowResizeHandles.vue  Edge grips, since a frameless window has no border
+    ImageLightbox.vue     A conversation image, enlarged to the window
+    DiffOverview.vue      The diff's change map
   utils/diff.ts      Unified-diff parsing and split-view alignment
   utils/fuzzy.ts     Subsequence matching for the incremental filters
   utils/highlight.ts Syntax highlighting for the diff and file views
+  utils/changeMap.ts Draws the diff's change map
+  stores/lightbox.ts Which conversation image is enlarged, if any
   utils/sessionState.ts  Pure state fold and tray rollup
   utils/trayIcon.ts  Draws the badge bitmap
 ```
@@ -288,6 +294,32 @@ The two filters narrow their list as you type (subsequences work: `kwchat` finds
 `kilo-web-chat`), `↑`/`↓` move the selection, `Enter` opens it and `Esc` clears
 it. `Ctrl`+`R` and `Ctrl`+`P` are Chromium's reload and print by default; both are
 taken over here, which is what the app's own shortcuts require.
+
+## Reading a diff
+
+Both sides of the file are fetched — the index or `HEAD` for the old side, the
+working tree or the index for the new one, depending on whether the change is
+unstaged, staged or untracked — so the diff shows the file itself with the
+changes marked inside it, the way an editor's side-by-side view does, rather than
+only the hunks.
+
+- The two halves are equal, each with a line-number gutter and its code, and long
+  lines wrap inside their own half instead of scrolling away from their
+  counterpart.
+- Changed rows are tinted across gutter and code, with a saturated change bar on
+  the gutter's outer edge.
+- The **change map** down the right edge compresses the whole file into a strip:
+  red where lines went, green where they arrived (left and right halves
+  respectively, so a replaced line shows both), with the visible part marked.
+  Clicking or dragging it moves through the file.
+- `+n −m` in the header comes from the patch; the map and the bars come from the
+  rows.
+- Past 400 KB or 6000 lines a side, or for binary files, the sides are not sent
+  and the view falls back to hunks with a gap marker and a "hunks only" tag.
+
+Returning to the conversation — from a diff, a file view, or anywhere else —
+lands on its end, since showing a diff unmounts the thread and it would otherwise
+come back at the first message.
 
 ## Syntax highlighting
 

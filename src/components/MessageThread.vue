@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue"
+import { computed, nextTick, onMounted, ref, watch } from "vue"
 import MessageItem from "./MessageItem.vue"
 import Spinner from "./Spinner.vue"
 import { useChat } from "@/stores/chat"
@@ -84,6 +84,18 @@ watch(currentSessionID, () => {
   pinned.value = true
   programmatic = false
 }, { flush: "post" })
+
+/**
+ * Opening the thread — first load, a session switch, or coming back from the
+ * diff view, which unmounts it — must show where the conversation got to rather
+ * than start at the first message. The frame after covers content that takes a
+ * moment to lay out, such as images and highlighted code.
+ */
+onMounted(() => {
+  pinned.value = true
+  void scrollToBottom()
+  requestAnimationFrame(() => void scrollToBottom())
+})
 </script>
 
 <template>

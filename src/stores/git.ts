@@ -26,6 +26,11 @@ export interface OpenDiff {
   parsed: ParsedDiff
   binary: boolean
   truncated: boolean
+  /** Both sides' full text, so the viewer can show the whole file. */
+  oldText?: string
+  newText?: string
+  /** Whether those texts came back complete. */
+  complete: boolean
 }
 
 const EMPTY_DIFF: ParsedDiff = { meta: [], hunks: [], additions: 0, deletions: 0, binary: false, modeOnly: false }
@@ -185,6 +190,7 @@ export function useGit() {
         parsed: EMPTY_DIFF,
         binary: false,
         truncated: false,
+        complete: false,
       }
     }
 
@@ -200,6 +206,9 @@ export function useGit() {
         parsed: result.ok ? parseDiff(patch) : EMPTY_DIFF,
         binary: Boolean(result.binary),
         truncated: Boolean(result.truncated),
+        oldText: result.oldText,
+        newText: result.newText,
+        complete: Boolean(result.complete),
       }
     } catch (err) {
       if (seq !== diffSeq) return
@@ -211,6 +220,7 @@ export function useGit() {
         parsed: EMPTY_DIFF,
         binary: false,
         truncated: false,
+        complete: false,
       }
     }
   }

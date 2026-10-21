@@ -6,7 +6,7 @@
  * as a single column ("unified") and as old/new columns ("split").
  */
 
-export type DiffLineType = "context" | "add" | "del" | "note"
+export type DiffLineType = "context" | "add" | "del" | "note" | "gap"
 
 export interface DiffLine {
   type: DiffLineType
@@ -138,9 +138,13 @@ function stripPrefix(value: string): string {
 }
 
 /** One renderable row of the split (side-by-side) view. */
+/** One row of the split view: a pair of cells, or a full-width note. */
 export type SplitRow =
   | { kind: "line"; left: DiffLine | null; right: DiffLine | null }
   | { kind: "note"; text: string }
+
+/** A row of the split view, as the viewer consumes it. */
+export type FileRow = SplitRow
 
 /**
  * Pair a hunk's lines into old/new columns: deletions and the additions that
@@ -194,4 +198,86 @@ export function splitPath(path: string): { base: string; dir: string } {
   const index = path.lastIndexOf("/")
   if (index === -1) return { base: path, dir: "" }
   return { base: path.slice(index + 1), dir: path.slice(0, index) }
+}
+
+/** Split file text into lines, without a phantom empty last line. */
+function splitLines(text: string): string[] {
+  if (!text) return []
+  const lines = text.split("\n")
+  if (lines.length && lines[lines.length - 1] === "") lines.pop()
+  return lines
+}
+
+/** Whole-file rows, ready for either view. */
+export interface FullFileRows {
+  unified: DiffLine[]
+  split: SplitRow[]
+}
+
+/**
+ * Expand hunks into the whole file, so the viewer shows the same thing an
+ * editor's side-by-side diff does: both files in full, with the changes marked
+ * inside them, and no `@@` headers.
+ *
+ * Unchanged regions between hunks become context rows taken from the new file,
+ * where both sides agree line for line. The cursor arithmetic has to respect
+ * git's convention for empty hunks: a pure insertion reports the line *before*
+ * the insertion as its start, a pure deletion the line before the gap it leaves.
+ */
+export function expandToFullFile(hunks: DiffHunk[], oldText: string, newText: string): FullFileRows {
+  const oldLines = splitLines(oldText)
+  const newLines = splitLines(newText)
+  const unified: DiffLine[] = []
+  const split: SplitRow[] = []
+
+  let oldCursor = 1
+  let newCursor = 1
+
+  const pushContext = (text: string) => {
+    const line: DiffLine = { type: "context", text, oldNo: oldCursor, newNo: newCursor }
+    unified.push(line)
+    split.push({ kind: "line", left: line, right: line })
+    oldCursor++
+    newCursor++
+  }
+
+  for (const hunk of hunks) {
+    const oldGapEnd = hunk.oldCount > 0 ? hunk.oldStart - 1 : hunk.oldStart
+    const newGapEnd = hunk.newCount > 0 ? hunk.newStart - 1 : hunk.newStart
+    while (oldCursor <= oldGapEnd && newCursor <= newGapEnd) pushContext(newLines[newCursor - 1] ?? "")
+
+    unified.push(...hunk.lines)
+    split.push(...toSplitRows(hunk.lines))
+
+    oldCursor = hunk.oldCount > 0 ? hunk.oldStart + hunk.oldCount : hunk.oldStart + 1
+    newCursor = hunk.newCount > 0 ? hunk.newStart + hunk.newCount : hunk.newStart + 1
+  }
+
+  // Whatever is left of the file after the last hunk.
+  while (oldCursor <= oldLines.length && newCursor <= newLines.length) pushContext(newLines[newCursor - 1] ?? "")
+
+  return { unified, split }
+}
+
+/**
+ * Rows for the fallback view: the hunks alone, with a marker where the file is
+ * elided between them. Used when a side was too large to send, so the viewer
+ * cannot show the whole file.
+ */
+export function hunksToRows(hunks: DiffHunk[]): FullFileRows {
+  const unified: DiffLine[] = []
+  const split: SplitRow[] = []
+
+  hunks.forEach((hunk, index) => {
+    if (index > 0) {
+      // The header names the range that is missing, which is the useful thing to
+      // show in a gap.
+      unified.push({ type: "gap", text: hunk.header, oldNo: null, newNo: null })
+      split.push({ kind: "note", text: hunk.header })
+    }
+    unified.push(...hunk.lines)
+    split.push(...toSplitRows(hunk.lines))
+  })
+
+  return { unified, split }
 }

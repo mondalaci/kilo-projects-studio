@@ -554,13 +554,13 @@ function onKeydown(event: KeyboardEvent) {
   background: #9b9b9b;
 }
 .state-dot.blocked {
-  background: #e5484d;
+  background: var(--git-deleted);
 }
 .state-dot.working {
-  background: #f5a623;
+  background: var(--git-modified);
 }
 .state-dot.done {
-  background: #35c06a;
+  background: var(--git-added);
 }
 .state-dot.idle {
   background: #9b9b9b;

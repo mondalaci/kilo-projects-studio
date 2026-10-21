@@ -2,11 +2,25 @@
 import { computed, createApp, onBeforeUnmount, onMounted, ref, watch, type App as VueApp } from "vue"
 import { marked } from "marked"
 import DOMPurify from "dompurify"
+import { openImage } from "@/stores/lightbox"
 import hljs from "highlight.js/lib/common"
 import PronunciationBlock from "./PronunciationBlock.vue"
 import { parsePronunciation } from "@/utils/pronunciation"
 
 const props = defineProps<{ text: string; streaming?: boolean }>()
+
+/**
+ * An image inside a message opens enlarged, and clicking it again brings back the
+ * size it has in the thread. Handled by delegation so every image in rendered
+ * markdown is covered, wherever it sits.
+ */
+function onImageClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  if (!target || target.tagName !== "IMG") return
+  const image = target as HTMLImageElement
+  event.preventDefault()
+  openImage(image.currentSrc || image.src, image.alt)
+}
 const root = ref<HTMLElement | null>(null)
 
 marked.setOptions({ gfm: true, breaks: true })
@@ -191,5 +205,5 @@ watch([html, () => props.streaming], ([, streaming], [, prevStreaming]) => {
 </script>
 
 <template>
-  <div ref="root" class="markdown" v-html="html"></div>
+  <div ref="root" class="markdown" v-html="html" @click="onImageClick"></div>
 </template>

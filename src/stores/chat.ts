@@ -29,8 +29,13 @@ const questions = ref<QuestionRequest[]>([])
 const todos = ref<Todo[]>([])
 const currentSessionID = ref<string | null>(null)
 
-/** Bumped on every user send so the view forces a re-pin and scroll to bottom. */
+/** Bumped when the view should force a re-pin and scroll to the bottom. */
 const scrollToBottomRequest = ref(0)
+
+/** Ask the conversation to show its end, e.g. when the diff view closes. */
+function requestScrollToBottom() {
+  scrollToBottomRequest.value++
+}
 
 /** Parts that arrived before their parent message (rare, but handled). */
 const orphanParts = new Map<string, Part[]>()
@@ -325,6 +330,7 @@ export function useChat() {
     pendingQuestions,
     currentSessionID,
     scrollToBottomRequest,
+    requestScrollToBottom,
     open,
     send,
     abort,

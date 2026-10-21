@@ -17,6 +17,7 @@ import MessageThread from "./MessageThread.vue"
 import Composer from "./Composer.vue"
 import PromptDock from "./PromptDock.vue"
 import FileViewer from "./FileViewer.vue"
+import ImageLightbox from "./ImageLightbox.vue"
 import { useApp } from "@/stores/app"
 import { useFileViewer } from "@/stores/fileViewer"
 import { startFilter, stopFilter } from "@/stores/filter"
@@ -42,6 +43,21 @@ const { newChat } = app
 const activeDiff = git.selection
 /** A read-only file opened from the file search, when it has nothing to diff. */
 const activeFile = fileViewer.view
+
+/**
+ * Returning to the conversation — from a diff, a file, or the search — should show
+ * where it left off rather than wherever it was scrolled to before, which may be
+ * thousands of lines away in a long thread.
+ */
+watch(
+  () => [Boolean(activeDiff.value), Boolean(activeFile.value)],
+  ([hadDiff, hadFile], [wasDiff, wasFile]) => {
+    if ((wasDiff || wasFile) && !hadDiff && !hadFile) app.chat.requestScrollToBottom()
+  },
+  // After the DOM update: the thread is only back in the tree once the diff has
+  // gone, and a request made before that would not reach it.
+  { flush: "post" },
+)
 
 const shareState = ref<"idle" | "shared" | "copied" | "unshared">("idle")
 
@@ -445,6 +461,8 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </main>
+
+    <ImageLightbox />
 
     <div
       class="resizer right"

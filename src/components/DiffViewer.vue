@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { Columns2, RefreshCw, Rows3 } from "lucide-vue-next"
+import DiffOverview from "./DiffOverview.vue"
 import EditorHeader from "./EditorHeader.vue"
 import Spinner from "./Spinner.vue"
 import { useGit } from "@/stores/git"
-import { toSplitRows, type DiffHunk, type DiffLine } from "@/utils/diff"
-import { highlightHunks, languageForPath } from "@/utils/highlight"
+import { expandToFullFile, hunksToRows, splitPath, type DiffLine, type FileRow } from "@/utils/diff"
+import { highlightLines, languageForPath } from "@/utils/highlight"
 
 const git = useGit()
 const { openDiff, selection } = git
@@ -16,8 +17,10 @@ const bodyEl = ref<HTMLElement | null>(null)
 
 const diff = computed(() => openDiff.value)
 const parsed = computed(() => diff.value?.parsed ?? null)
-const hunks = computed<DiffHunk[]>(() => parsed.value?.hunks ?? [])
+const hunks = computed(() => parsed.value?.hunks ?? [])
 const path = computed(() => diff.value?.request.path ?? "")
+const base = computed(() => splitPath(path.value).base)
+const dir = computed(() => splitPath(path.value).dir)
 
 const scopeLabel = computed(() => {
   switch (diff.value?.request.scope) {
@@ -37,25 +40,89 @@ const emptyNote = computed(() => {
   return "This file has no changes in this group."
 })
 
-/** The old/new columns for the split view, per hunk. */
-const splitHunks = computed(() => hunks.value.map((hunk) => ({ hunk, rows: toSplitRows(hunk.lines) })))
+/**
+ * The whole file, both sides, wherever the main process could send both. An
+ * editor's diff shows the file with the changes marked inside it rather than the
+ * hunks alone, and so does this: the unchanged stretches between hunks come from
+ * the file itself.
+ *
+ * When a side is too large or missing, the viewer falls back to the hunks with a
+ * gap marker standing in for what is elided.
+ */
+const fileRows = computed(() => {
+  const current = diff.value
+  if (!current?.complete || typeof current.oldText !== "string" || typeof current.newText !== "string") return null
+  return expandToFullFile(hunks.value, current.oldText, current.newText)
+})
 
-const highlighted = computed(() => highlightHunks(hunks.value, languageForPath(path.value)))
+const rows = computed(() => fileRows.value ?? hunksToRows(hunks.value))
+const showsWholeFile = computed(() => fileRows.value !== null)
+
+/**
+ * Highlighting runs over each side's whole text, indexed by line number. Doing it
+ * per hunk instead would colour a block comment that spans a hunk boundary as
+ * plain code.
+ */
+const highlighted = computed(() => {
+  const current = diff.value
+  const language = languageForPath(path.value)
+  if (!language || !current?.complete) return null
+  if (typeof current.oldText !== "string" || typeof current.newText !== "string") return null
+  const old = highlightLines(current.oldText, language)
+  const next = highlightLines(current.newText, language)
+  if (!old || !next) return null
+  return { old, new: next }
+})
 
 /**
  * The highlighted fragment for one cell, or null to render plain text. The side
  * matters: a deleted line only exists on the old side, an added one on the new.
  */
-function lineHtml(line: DiffLine | null, side: "old" | "new"): string | null {
+function lineHtml(line: DiffLine | null | undefined, side: "old" | "new"): string | null {
   const maps = highlighted.value
-  if (!maps || !line || line.type === "note") return null
+  if (!maps || !line || line.type === "note" || line.type === "gap") return null
   const number = side === "old" ? line.oldNo : line.newNo
-  if (number === null) return null
-  return (side === "old" ? maps.old : maps.new).get(number) ?? null
+  if (number === null || number === undefined) return null
+  return (side === "old" ? maps.old : maps.new)[number - 1] ?? null
 }
 
-const lineClass = (line: DiffLine | null) =>
-  line ? `line-${line.type === "note" ? "note" : line.type}` : "line-empty"
+/** The cell class for a line, which is also what tints its line-number gutter. */
+function cellClass(line: DiffLine | null | undefined): string {
+  if (!line) return "line-empty"
+  return line.type === "note" ? "line-note" : `line-${line.type}`
+}
+
+/** The sign that marks a row: `+`, `−`, or a space for context. */
+function sign(line: DiffLine | null | undefined): string {
+  if (!line || line.type === "note" || line.type === "gap") return " "
+  if (line.type === "add") return "+"
+  if (line.type === "del") return "−"
+  return " "
+}
+
+/** A row of the split view carries a left and a right cell. */
+function leftOf(row: FileRow): DiffLine | null {
+  return row.kind === "line" ? row.left : null
+}
+
+function rightOf(row: FileRow): DiffLine | null {
+  return row.kind === "line" ? row.right : null
+}
+
+/**
+ * One mark per rendered row, for the change map: which rows removed lines, which
+ * added them. Paired rows mark both, so a replaced line shows red and green.
+ */
+const marks = computed(() => {
+  if (view.value === "split") {
+    return rows.value.split.map((row) =>
+      row.kind === "line"
+        ? { del: leftOf(row)?.type === "del", add: rightOf(row)?.type === "add" }
+        : { del: false, add: false },
+    )
+  }
+  return rows.value.unified.map((line) => ({ del: line.type === "del", add: line.type === "add" }))
+})
 
 function close() {
   git.closeDiff()
@@ -86,6 +153,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
     <EditorHeader :path="path" @close="close">
       <template #path-extra>
         <span class="scope" :class="diff.request.scope">{{ scopeLabel }}</span>
+        <span v-if="!showsWholeFile" class="elided" title="The file was too large to show in full">hunks only</span>
       </template>
       <template #actions>
         <div v-if="parsed" class="stat" :title="`${parsed.additions} added, ${parsed.deletions} removed`">
@@ -108,69 +176,55 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
     <div v-else-if="diff.error" class="state error">{{ diff.error }}</div>
     <div v-else-if="!hasContent" class="state">{{ emptyNote }}</div>
 
-    <div v-else ref="bodyEl" class="diff-body">
-      <p v-if="diff.truncated" class="truncated">Patch truncated — the diff is larger than the viewer shows.</p>
+    <div v-else class="diff-pane">
+      <div ref="bodyEl" class="diff-body">
+        <p v-if="diff.truncated" class="notice">Patch truncated — the diff is larger than the viewer shows.</p>
 
-      <!-- Split (side-by-side) view -->
-      <template v-if="view === 'split'">
-        <section v-for="(group, index) in splitHunks" :key="`s${index}`" class="hunk">
-          <div class="hunk-head">{{ group.hunk.header }}</div>
-          <table class="grid split">
-            <tbody>
-              <tr v-for="(row, rowIndex) in group.rows" :key="rowIndex">
-                <template v-if="row.kind === 'note'">
-                  <td class="note" colspan="4">{{ row.text }}</td>
-                </template>
-                <template v-else>
-                  <td class="num">{{ row.left?.oldNo ?? "" }}</td>
-                  <td :class="lineClass(row.left)">
-                    <span class="sign">{{ row.left?.type === "del" ? "−" : " " }}</span><span
-                      v-if="lineHtml(row.left, 'old')"
-                      class="code"
-                      v-html="lineHtml(row.left, 'old')"
-                    ></span><template v-else>{{ row.left?.text ?? "" }}</template>
-                  </td>
-                  <td class="num">{{ row.right?.newNo ?? "" }}</td>
-                  <td :class="lineClass(row.right)">
-                    <span class="sign">{{ row.right?.type === "add" ? "+" : " " }}</span><span
-                      v-if="lineHtml(row.right, 'new')"
-                      class="code"
-                      v-html="lineHtml(row.right, 'new')"
-                    ></span><template v-else>{{ row.right?.text ?? "" }}</template>
-                  </td>
-                </template>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-      </template>
+        <!-- Split: the two versions side by side, each half a gutter and its code. -->
+        <table v-if="view === 'split'" class="grid split">
+          <tbody>
+            <tr v-for="(row, index) in rows.split" :key="index">
+              <td v-if="row.kind !== 'line'" class="band" colspan="4">{{ row.text }}</td>
+              <template v-else>
+                <td class="num" :class="cellClass(leftOf(row))">{{ leftOf(row)?.oldNo ?? "" }}</td>
+                <td :class="cellClass(leftOf(row))">
+                  <span class="sign">{{ sign(leftOf(row)) }}</span><span
+                    v-if="lineHtml(leftOf(row), 'old')"
+                    v-html="lineHtml(leftOf(row), 'old')"
+                  ></span><template v-else>{{ leftOf(row)?.text ?? "" }}</template>
+                </td>
+                <td class="num" :class="cellClass(rightOf(row))">{{ rightOf(row)?.newNo ?? "" }}</td>
+                <td :class="cellClass(rightOf(row))">
+                  <span class="sign">{{ sign(rightOf(row)) }}</span><span
+                    v-if="lineHtml(rightOf(row), 'new')"
+                    v-html="lineHtml(rightOf(row), 'new')"
+                  ></span><template v-else>{{ rightOf(row)?.text ?? "" }}</template>
+                </td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
 
-      <!-- Unified view -->
-      <template v-else>
-        <section v-for="(hunk, index) in hunks" :key="`u${index}`" class="hunk">
-          <div class="hunk-head">{{ hunk.header }}</div>
-          <table class="grid unified">
-            <tbody>
-              <tr v-for="(line, lineIndex) in hunk.lines" :key="lineIndex">
-                <template v-if="line.type === 'note'">
-                  <td class="note" colspan="3">{{ line.text }}</td>
-                </template>
-                <template v-else>
-                  <td class="num">{{ line.oldNo ?? "" }}</td>
-                  <td class="num">{{ line.newNo ?? "" }}</td>
-                  <td :class="lineClass(line)">
-                    <span class="sign">{{ line.type === "add" ? "+" : line.type === "del" ? "−" : " " }}</span><span
-                      v-if="lineHtml(line, line.type === 'del' ? 'old' : 'new')"
-                      class="code"
-                      v-html="lineHtml(line, line.type === 'del' ? 'old' : 'new')"
-                    ></span><template v-else>{{ line.text }}</template>
-                  </td>
-                </template>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-      </template>
+        <!-- Unified: one column, with both numbers in the gutter. -->
+        <table v-else class="grid unified">
+          <tbody>
+            <tr v-for="(line, index) in rows.unified" :key="index">
+              <td v-if="line.type === 'note' || line.type === 'gap'" class="band" colspan="3">{{ line.text }}</td>
+              <template v-else>
+                <td class="num" :class="cellClass(line)">{{ line.oldNo ?? "" }}</td>
+                <td class="num" :class="cellClass(line)">{{ line.newNo ?? "" }}</td>
+                <td :class="cellClass(line)">
+                  <span class="sign">{{ sign(line) }}</span><span
+                    v-if="lineHtml(line, line.type === 'del' ? 'old' : 'new')"
+                    v-html="lineHtml(line, line.type === 'del' ? 'old' : 'new')"
+                  ></span><template v-else>{{ line.text }}</template>
+                </td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <DiffOverview :marks="marks" :body="bodyEl" />
     </div>
 
     <footer v-if="selection" class="diff-foot">
@@ -200,8 +254,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
   color: var(--text-muted);
 }
 .scope.staged {
-  color: #35c06a;
-  border-color: color-mix(in srgb, #35c06a 45%, transparent);
+  color: var(--git-added);
+  border-color: color-mix(in srgb, var(--git-added) 45%, transparent);
+}
+.elided {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
 }
 .stat {
   flex: none;
@@ -212,10 +273,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
   font-variant-numeric: tabular-nums;
 }
 .stat .add {
-  color: #35c06a;
+  color: var(--git-added);
 }
 .stat .del {
-  color: #ef6b6b;
+  color: var(--git-deleted);
 }
 .state {
   flex: 1;
@@ -228,50 +289,62 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
 .state.error {
   color: var(--danger);
 }
-.diff-body {
+/* The pane holds the scrolling diff and the change map over its right edge. */
+.diff-pane {
+  position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 10px 0 24px;
+  display: flex;
 }
-.truncated {
-  margin: 0 14px 10px;
+.diff-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 0 24px;
+  /* Room for the change map, which is opaque and would otherwise sit on the code. */
+  padding-right: 11px;
+}
+.notice {
+  margin: 10px 14px;
   font-size: 12px;
   color: var(--accent);
 }
-.hunk + .hunk {
-  margin-top: 14px;
-}
-.hunk-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg) 92%, var(--accent));
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 2px 12px;
-}
 table.grid {
   border-collapse: collapse;
+  width: 100%;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
-  min-width: 100%;
 }
-/* Auto table layout (the default) is deliberate: columns size to their widest
-   line, so a long line widens the table and the body scrolls horizontally
-   instead of clipping or wrapping the code out of alignment. */
+/* Equal halves, like an editor's side-by-side diff: a gutter and a code column
+   per side, with the two code columns sharing what is left evenly. */
+table.split {
+  table-layout: fixed;
+}
+/* Only the gutters are fixed. The rule that used to sit here set `width: auto` on
+   every cell, which out-specifies `td.num`, and with a fixed layout four auto
+   columns take a quarter each — so the two gutters ate half the width. Leaving the
+   code cells auto lets them share what the gutters do not use, evenly. */
+table.split td.num {
+  position: relative;
+  width: 52px;
+}
+table.split tr > td:nth-child(2) {
+  border-right: 1px solid var(--border);
+}
 table.grid td {
   padding: 0 8px 0 4px;
-  white-space: pre;
   vertical-align: top;
   border: none;
+  /* Long lines wrap inside their own half rather than being cut off. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
+/* The gutter carries the change colour more strongly than the code, which is
+   what makes a changed row read as one band across the pair. */
 td.num {
-  width: 46px;
+  width: 52px;
   padding-right: 8px;
   text-align: right;
   color: var(--text-faint);
@@ -280,15 +353,38 @@ td.num {
   background: var(--bg);
   border-right: 1px solid var(--border);
 }
+td.num.line-add {
+  background: rgba(53, 192, 106, 0.34);
+}
+td.num.line-del {
+  background: rgba(239, 107, 107, 0.34);
+}
+/* The change bar: a saturated stripe on the outer edge of the gutter, so the
+   changed region is legible even where the row's tint is faint. */
+td.num.line-add::before,
+td.num.line-del::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+}
+td.num.line-add::before {
+  background: var(--git-added);
+}
+td.num.line-del::before {
+  background: var(--git-deleted);
+}
 td.line-context {
   color: var(--text);
 }
 td.line-add {
-  background: rgba(53, 192, 106, 0.14);
+  background: rgba(53, 192, 106, 0.13);
   color: var(--text);
 }
 td.line-del {
-  background: rgba(239, 107, 107, 0.14);
+  background: rgba(239, 107, 107, 0.13);
   color: var(--text);
 }
 td.line-empty {
@@ -304,6 +400,15 @@ td.line-note {
   color: var(--text-faint);
   font-style: italic;
 }
+td.band {
+  padding: 2px 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: color-mix(in srgb, var(--bg) 88%, var(--accent));
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  white-space: pre;
+}
 .sign {
   display: inline-block;
   width: 1ch;
@@ -311,15 +416,14 @@ td.line-note {
   user-select: none;
 }
 td.line-add .sign {
-  color: #35c06a;
+  color: var(--git-added);
 }
 td.line-del .sign {
-  color: #ef6b6b;
+  color: var(--git-deleted);
 }
-td.note {
-  color: var(--text-faint);
-  font-style: italic;
-  padding-left: 12px;
+td.line-note .sign,
+td.line-empty .sign {
+  color: transparent;
 }
 .diff-foot {
   flex: none;

@@ -50,6 +50,12 @@ export interface GitDiffResult {
   truncated?: boolean
   error?: string
   root?: string
+  /** The old side's full text, so the viewer can show the whole file. */
+  oldText?: string
+  /** The new side's full text. */
+  newText?: string
+  /** False when a side was too large or binary: the viewer then shows hunks only. */
+  complete?: boolean
 }
 
 export interface GitOpResult {

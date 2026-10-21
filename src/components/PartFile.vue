@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
+import { openImage } from "@/stores/lightbox"
 import { Check, ChevronDown, ChevronRight, Copy, Download, File as FileIcon, ExternalLink } from "lucide-vue-next"
 import type { FilePart } from "@/api/types"
 import { dataUrlByteLength, dataUrlText, dataUrlToBlob, formatBytes, isDataUrl, isTextMime } from "@/utils/file"
@@ -76,7 +77,14 @@ async function copy() {
 
 <template>
   <div class="part-file">
-    <img v-if="isImage" :src="url" :alt="name" />
+    <img
+      v-if="isImage"
+      :src="url"
+      :alt="name"
+      class="zoomable"
+      title="Click to enlarge"
+      @click="openImage(url, name)"
+    />
 
     <template v-else>
       <button type="button" class="file-chip" :title="isRemote ? `Open ${name}` : `Show ${name}`" @click="toggle">
@@ -113,6 +121,10 @@ async function copy() {
   max-height: 360px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+/* Clicking enlarges it to the window; clicking again brings this size back. */
+.part-file img.zoomable {
+  cursor: zoom-in;
 }
 .file-chip {
   display: inline-flex;

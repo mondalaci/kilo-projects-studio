@@ -394,17 +394,21 @@ function parts(path: string) {
   color: var(--text-muted);
 }
 .status.modified {
-  color: #d9a03c;
+  color: var(--git-modified);
 }
 .status.added {
-  color: #35c06a;
+  color: var(--git-added);
 }
 .status.deleted {
-  color: #ef6b6b;
+  color: var(--git-deleted);
 }
 .status.renamed {
-  color: #58a6ff;
+  color: var(--git-renamed);
 }
+/* The path keeps its own two-tone scheme — a dimmer directory leading to a bright
+   file name — and the status is carried by the letter beside it. Colouring the
+   name by status instead was tried and taken back out: it flattened the path and
+   left every modified file the same shade. */
 /* One row per file, showing its whole path. The parts share a single span so no
    flex gap falls inside the path, and the directory gives way first so the file
    name stays readable in a narrow panel. */

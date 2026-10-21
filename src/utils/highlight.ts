@@ -1,5 +1,4 @@
 import hljs from "highlight.js/lib/common"
-import type { DiffHunk } from "./diff"
 
 /**
  * Syntax highlighting for the diff and file views.
@@ -22,11 +21,13 @@ const EXTENSIONS: Record<string, string> = {
   bash: "bash",
   c: "c",
   cc: "cpp",
+  cjs: "javascript",
   cfg: "ini",
   clj: "clojure",
   cpp: "cpp",
   cs: "csharp",
   css: "css",
+  cts: "typescript",
   cxx: "cpp",
   diff: "diff",
   dockerfile: "dockerfile",
@@ -54,6 +55,7 @@ const EXTENSIONS: Record<string, string> = {
   md: "markdown",
   mjs: "javascript",
   mm: "objectivec",
+  mts: "typescript",
   patch: "diff",
   php: "php",
   pl: "perl",
@@ -172,65 +174,4 @@ export function highlightLines(code: string, language: string | null): string[] 
   } catch {
     return null
   }
-}
-
-/** Highlighted HTML per source line, for each side of a diff. */
-export interface HighlightedSides {
-  /** Keyed by absolute line number in the old file. */
-  old: Map<number, string>
-  /** Keyed by absolute line number in the new file. */
-  new: Map<number, string>
-}
-
-/**
- * Highlight every hunk, returning one fragment per source line of each side.
- *
- * Each side is highlighted whole (so multi-line constructs keep their colour) and
- * then split back into lines. Walking the hunk's own line numbers is what keeps
- * the fragments attached to the right rows: a deletion only exists on the old
- * side and an addition only on the new one, so the two sides advance
- * independently.
- */
-export function highlightHunks(hunks: DiffHunk[], language: string | null): HighlightedSides | null {
-  if (!language || !hunks.length) return null
-
-  const oldLines = new Map<number, string>()
-  const newLines = new Map<number, string>()
-
-  for (const hunk of hunks) {
-    const oldFragments = highlightLines(
-      hunk.lines
-        .filter((line) => line.type === "context" || line.type === "del")
-        .map((line) => line.text)
-        .join("\n"),
-      language,
-    )
-    const newFragments = highlightLines(
-      hunk.lines
-        .filter((line) => line.type === "context" || line.type === "add")
-        .map((line) => line.text)
-        .join("\n"),
-      language,
-    )
-    if (!oldFragments || !newFragments) return null
-
-    let oldIndex = 0
-    let newIndex = 0
-    for (const line of hunk.lines) {
-      if (line.type === "context") {
-        if (line.oldNo !== null) oldLines.set(line.oldNo, oldFragments[oldIndex] ?? "")
-        if (line.newNo !== null) newLines.set(line.newNo, newFragments[newIndex] ?? "")
-        oldIndex++
-        newIndex++
-      } else if (line.type === "del") {
-        if (line.oldNo !== null) oldLines.set(line.oldNo, oldFragments[oldIndex] ?? "")
-        oldIndex++
-      } else if (line.type === "add") {
-        if (line.newNo !== null) newLines.set(line.newNo, newFragments[newIndex] ?? "")
-        newIndex++
-      }
-    }
-  }
-
-  return { old: oldLines, new: newLines }
 }
