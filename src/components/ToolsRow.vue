@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue"
 import { ChevronRight } from "lucide-vue-next"
 import { useServer } from "@/stores/server"
 import { useTools } from "@/stores/tools"
-import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
+import { openRequests } from "@/stores/shortcuts"
 import { toolState, type ToolState } from "@/utils/tools"
 
 const TOOLS_DOCS_URL = "https://kilo.ai/docs/automate/tools"
@@ -64,7 +64,6 @@ function onToggle(id: string) {
       <ChevronRight :size="13" class="tools-chev" :class="{ open: expanded }" />
       <span class="tools-label">Tools</span>
       <span class="tools-count">{{ enabledCount }}/{{ tools.length }}</span>
-      <kbd v-if="shortcutsVisible" class="kbd floating">T</kbd>
     </button>
     <div class="tools-collapse" :class="{ open }">
       <div class="tools-collapse-inner">

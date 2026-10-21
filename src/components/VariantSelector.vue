@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ShortcutBadge from "./ShortcutBadge.vue"
 import { computed, nextTick, ref, watch } from "vue"
 import {
   ComboboxAnchor,
@@ -14,7 +15,7 @@ import {
 } from "reka-ui"
 import { Check, ChevronDown, Gauge } from "lucide-vue-next"
 import { useServer } from "@/stores/server"
-import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
+import { openRequests } from "@/stores/shortcuts"
 
 const { selectedModelVariants, selectedVariant, setVariant } = useServer()
 
@@ -103,7 +104,7 @@ watch(
       <ComboboxTrigger class="kilo-variant-chevron" aria-label="Select variant (Alt+E)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
-      <kbd v-if="shortcutsVisible" class="kbd floating">E</kbd>
+      <ShortcutBadge modifier="alt" key-label="E" />
     </ComboboxAnchor>
 
     <ComboboxPortal>

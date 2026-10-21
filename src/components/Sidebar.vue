@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import { MessageSquarePlus, Search } from "lucide-vue-next"
+import ShortcutBadge from "./ShortcutBadge.vue"
 import ProjectsPanel from "./ProjectsPanel.vue"
 import SidebarSearch from "./SidebarSearch.vue"
 import { useApp } from "@/stores/app"
-import { shortcutsVisible } from "@/stores/shortcuts"
 import { openSearch, searchOpen } from "@/stores/search"
 
 const app = useApp()
@@ -21,15 +21,15 @@ const projectCount = computed(() => app.projects.entries.value.length)
     <template v-else>
       <header class="head drag-region">
         <span class="logo">K</span>
-        <span class="brand">Projects</span>
+        <span class="brand">Projects<ShortcutBadge placement="below" modifier="ctrl" key-label="R" /></span>
         <span class="brand-count" :title="`${projectCount} projects`">{{ projectCount }}</span>
         <button class="icon" title="Search conversations (Alt+F)" @click="openSearch()">
           <Search :size="16" />
-          <kbd v-if="shortcutsVisible" class="kbd floating">F</kbd>
+          <ShortcutBadge placement="inside" modifier="alt" key-label="F" />
         </button>
         <button class="icon" title="New chat (Alt+N)" @click="newChat()">
           <MessageSquarePlus :size="17" />
-          <kbd v-if="shortcutsVisible" class="kbd floating">N</kbd>
+          <ShortcutBadge placement="inside" modifier="alt" key-label="N" />
         </button>
       </header>
 
@@ -49,6 +49,10 @@ const projectCount = computed(() => app.projects.entries.value.length)
   flex-direction: column;
 }
 .head {
+  /* A containing block for the key badges on the header's buttons, and a layer
+     above the list below so a badge hanging past the header stays visible. */
+  position: relative;
+  z-index: 1;
   /* Matches the conversation header height so the top strip is one band. */
   flex: none;
   height: var(--header-height);
@@ -70,6 +74,7 @@ const projectCount = computed(() => app.projects.entries.value.length)
   font-size: 14px;
 }
 .brand {
+  position: relative;
   flex: none;
   font-size: 13.5px;
   font-weight: 600;
@@ -85,6 +90,9 @@ const projectCount = computed(() => app.projects.entries.value.length)
   font-variant-numeric: tabular-nums;
 }
 .icon {
+  /* A containing block for its key badge, or the badge anchors to the header and
+     lands on top of its neighbour's. */
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;

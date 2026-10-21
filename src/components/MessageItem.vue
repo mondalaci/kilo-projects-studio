@@ -4,7 +4,7 @@ import { User } from "lucide-vue-next"
 import type { FilePart, MessageWithParts, Part, TextPart, ToolPart } from "@/api/types"
 import { formatCost, formatDateTime, formatTokens } from "@/utils/format"
 import { composedMessage } from "@/utils/compose"
-import { shortcutsVisible } from "@/stores/shortcuts"
+import { heldModifier } from "@/stores/shortcuts"
 import Markdown from "./Markdown.vue"
 import PartFile from "./PartFile.vue"
 import PartMessageCompose from "./PartMessageCompose.vue"
@@ -72,7 +72,7 @@ function isCompose(part: Part): boolean {
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     </div>
     <div v-if="isUser" class="avatar user-avatar" aria-hidden="true"><User :size="15" /></div>
-    <div v-if="meta && !streaming && shortcutsVisible" class="meta" :title="meta.model">
+    <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.model">
       <div class="meta-inner">
         <div v-if="meta.created" class="meta-row meta-datetime">{{ formatDateTime(meta.created) }}</div>
         <div class="meta-model">{{ meta.model }}</div>

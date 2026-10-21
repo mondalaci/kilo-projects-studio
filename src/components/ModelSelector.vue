@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ShortcutBadge from "./ShortcutBadge.vue"
 import { computed, nextTick, ref, watch } from "vue"
 import {
   ComboboxAnchor,
@@ -22,7 +23,7 @@ import {
 import { Brain, Check, ChevronDown, Search } from "lucide-vue-next"
 import type { Model } from "@/api/types"
 import { useServer } from "@/stores/server"
-import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
+import { openRequests } from "@/stores/shortcuts"
 
 const { providerGroups, providers, selectedModel, setModel } = useServer()
 
@@ -213,7 +214,7 @@ function costColor(model: Model): string | undefined {
       <ComboboxTrigger class="kilo-model-chevron" aria-label="Toggle models (Alt+M)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
-      <kbd v-if="shortcutsVisible" class="kbd floating">M</kbd>
+      <ShortcutBadge modifier="alt" key-label="M" />
     </ComboboxAnchor>
 
     <ComboboxPortal>

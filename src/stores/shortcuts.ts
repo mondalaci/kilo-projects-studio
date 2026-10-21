@@ -3,12 +3,22 @@ import { reactive, ref } from "vue"
 /**
  * Keyboard-shortcut state.
  *
- * Holding the modifier (`Alt`) reveals key badges on the controls they trigger,
- * mirroring the "hold Cmd to see shortcuts" pattern. Actions that need to reach
- * a specific component are dispatched through `openRequests` counters that the
- * component watches.
+ * Holding a modifier reveals key badges on the controls its shortcuts trigger,
+ * mirroring the "hold Cmd to see shortcuts" pattern. `Alt` and `Ctrl` are separate
+ * layers — the filters live on Ctrl, everything else on Alt — so the layer that is
+ * held is what gets shown, and each badge names its own modifier.
+ *
+ * Actions that need to reach a specific component are dispatched through
+ * `openRequests` counters that the component watches.
  */
-export const shortcutsVisible = ref(false)
+export type ShortcutModifier = "alt" | "ctrl"
+
+/** Which modifier is held, if any. */
+export const heldModifier = ref<ShortcutModifier | null>(null)
+
+export function setHeldModifier(value: ShortcutModifier | null) {
+  heldModifier.value = value
+}
 
 export const openRequests = reactive({ model: 0, agent: 0, project: 0, sessions: 0, effort: 0, tools: 0, chats: 0 })
 

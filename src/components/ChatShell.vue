@@ -20,6 +20,7 @@ import DiffViewer from "./DiffViewer.vue"
 import MessageThread from "./MessageThread.vue"
 import Composer from "./Composer.vue"
 import PromptDock from "./PromptDock.vue"
+import ShortcutBadge from "./ShortcutBadge.vue"
 import ToolsRow from "./ToolsRow.vue"
 import FileViewer from "./FileViewer.vue"
 import ImageLightbox from "./ImageLightbox.vue"
@@ -29,7 +30,7 @@ import { startFilter, stopFilter } from "@/stores/filter"
 import { useGit } from "@/stores/git"
 import { useTray } from "@/stores/tray"
 import { requestComposerFocus } from "@/stores/draft"
-import { openRequests, requestOpen, shortcutKeys, shortcutsVisible, togglePronunciation } from "@/stores/shortcuts"
+import { openRequests, requestOpen, setHeldModifier, shortcutKeys, togglePronunciation } from "@/stores/shortcuts"
 import { searchOpen, openSearch } from "@/stores/search"
 import { applyScmWidth, scmWidth, setScmWidth } from "@/stores/layout"
 import { theme, toggleTheme } from "@/theme"
@@ -281,7 +282,10 @@ function dismissError() {
  * reveals the key badges on the controls they trigger.
  */
 function onKeyDown(event: KeyboardEvent) {
-  if (event.altKey) shortcutsVisible.value = true
+  // Holding a modifier reveals that layer's badges: Alt for the actions, Ctrl for
+  // the filters.
+  if (event.altKey) setHeldModifier("alt")
+  else if (event.ctrlKey || event.metaKey) setHeldModifier("ctrl")
 
   // The incremental searches use the familiar editor bindings: Ctrl+R filters
   // the projects sidebar, Ctrl+P the source-control list. Chromium's own Ctrl+R
@@ -356,11 +360,13 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 function onKeyUp(event: KeyboardEvent) {
-  if (event.key === "Alt" || !event.altKey) shortcutsVisible.value = false
+  // Clear as soon as neither modifier is down, so the badges outlive the letter
+  // but not the modifier.
+  if (!event.altKey && !event.ctrlKey && !event.metaKey) setHeldModifier(null)
 }
 
 function onBlur() {
-  shortcutsVisible.value = false
+  setHeldModifier(null)
 }
 
 function onPopState() {
@@ -388,7 +394,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keyup", onKeyUp)
   window.removeEventListener("blur", onBlur)
   window.removeEventListener("popstate", onPopState)
-  shortcutsVisible.value = false
+  setHeldModifier(null)
 })
 </script>
 
@@ -417,7 +423,10 @@ onBeforeUnmount(() => {
           </div>
           <PopoverRoot v-model:open="toolsOpen">
             <PopoverTrigger as-child>
-              <button class="app-btn" title="Tools (Alt+T)" aria-label="Tools"><Wrench :size="16" /></button>
+              <button class="app-btn" title="Tools (Alt+T)" aria-label="Tools">
+                <Wrench :size="16" />
+                <ShortcutBadge placement="inside" modifier="alt" key-label="T" />
+              </button>
             </PopoverTrigger>
             <PopoverPortal>
               <PopoverContent class="tools-panel" :side-offset="6" align="end">

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from "vue"
 import { ArrowUp, FileText, Paperclip, Square, TriangleAlert, X } from "lucide-vue-next"
+import ShortcutBadge from "./ShortcutBadge.vue"
 import AgentSelector from "./AgentSelector.vue"
 import ModelSelector from "./ModelSelector.vue"
 import VariantSelector from "./VariantSelector.vue"
 import { useApp } from "@/stores/app"
 import { addFile, attachments, clearAttachments, composerFocusRequest, draft, removeAttachment } from "@/stores/draft"
 import { useServer } from "@/stores/server"
-import { shortcutsVisible } from "@/stores/shortcuts"
 
 const app = useApp()
 const { sending, isBusy } = app.chat
@@ -151,7 +151,7 @@ function onKeydown(event: KeyboardEvent) {
           @keydown="onKeydown"
           @paste="onPaste"
         />
-        <kbd v-if="shortcutsVisible" class="kbd floating">C</kbd>
+        <ShortcutBadge modifier="alt" key-label="C" />
       </div>
 
       <div class="bar">
@@ -175,7 +175,7 @@ function onKeydown(event: KeyboardEvent) {
         </div>
         <div class="bar-right">
           <button v-if="isBusy" class="send stop" title="Stop (Alt+X)" @click="stop">
-            <kbd v-if="shortcutsVisible" class="kbd floating">X</kbd>
+            <ShortcutBadge modifier="alt" key-label="X" />
             <Square :size="14" fill="currentColor" />
           </button>
           <button

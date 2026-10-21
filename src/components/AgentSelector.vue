@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ShortcutBadge from "./ShortcutBadge.vue"
 import { computed, nextTick, ref, watch } from "vue"
 import {
   ComboboxAnchor,
@@ -14,7 +15,7 @@ import {
 } from "reka-ui"
 import { Bot, Check, ChevronDown } from "lucide-vue-next"
 import { useServer } from "@/stores/server"
-import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
+import { openRequests } from "@/stores/shortcuts"
 
 const { modes, selectedAgent, setAgent } = useServer()
 
@@ -105,7 +106,7 @@ watch(
       <ComboboxTrigger class="kilo-agent-chevron" aria-label="Select mode (Alt+A)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
-      <kbd v-if="shortcutsVisible" class="kbd floating">A</kbd>
+      <ShortcutBadge modifier="alt" key-label="A" />
     </ComboboxAnchor>
 
     <ComboboxPortal>

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { Check, KeyRound, Loader2, Play, Square, Volume2 } from "lucide-vue-next"
 import { parsePronunciation } from "@/utils/pronunciation"
 import { priceLabel, useSpeech } from "@/stores/speech"
-import { registerPronunciation, shortcutsVisible } from "@/stores/shortcuts"
+import { heldModifier, registerPronunciation } from "@/stores/shortcuts"
 
 const props = defineProps<{ text: string; autoplay?: boolean }>()
 
@@ -173,7 +173,7 @@ onBeforeUnmount(() => {
     <div class="pr-head">
       <span class="pr-title">
         <Volume2 :size="15" /> Pronunciation
-        <span v-if="shortcutsVisible && entries.length" class="kbd">V</span>
+        <span v-if="heldModifier === 'alt' && entries.length" class="kbd">Alt V</span>
         <span v-if="keySource === 'server'" class="pr-key-badge" title="Using the connected Kilo server's OpenRouter key">
           key: Kilo server
         </span>

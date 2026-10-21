@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue"
 import { LogOut, Minus, Plus } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
+import ShortcutBadge from "./ShortcutBadge.vue"
 import WindowControls from "./WindowControls.vue"
 import { filterTarget, stopFilter } from "@/stores/filter"
 import { useApp } from "@/stores/app"
@@ -152,7 +153,7 @@ function parts(path: string) {
 <template>
   <aside class="scm">
     <header class="scm-head drag-region">
-      <span class="scm-title">Diff</span>
+      <span class="scm-title">Diff<ShortcutBadge placement="below" modifier="ctrl" key-label="P" /></span>
       <span
         v-if="repo.isRepo"
         class="count-pill"
@@ -258,6 +259,10 @@ function parts(path: string) {
   border-left: 1px solid var(--border);
 }
 .scm-head {
+  /* Above the list below it, so a key badge hanging past the header's edge stays
+     visible instead of being painted over by the rows. */
+  position: relative;
+  z-index: 1;
   flex: none;
   /* Matches the conversation header height so the top strip is one band. */
   height: var(--header-height);
@@ -268,6 +273,7 @@ function parts(path: string) {
   border-bottom: 1px solid var(--border);
 }
 .scm-title {
+  position: relative;
   /* The pills belong against the title, so it takes its own width and the space
      before the window controls is left to the spacer. */
   flex: none;
@@ -276,8 +282,9 @@ function parts(path: string) {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* No clipping: the key badge hangs below the label, and `overflow: hidden` would
+     cut it off — which it did, invisibly, since the badge was still in the DOM. */
+  overflow: visible;
   white-space: nowrap;
 }
 /* The change count, beside the title: what the removed group header used to say. */

@@ -277,7 +277,9 @@ per tick, and the two global request lists every fourth tick.
 
 ## Keyboard shortcuts
 
-Hold `Alt` to reveal the key badges on the controls they trigger.
+Hold `Alt` or `Ctrl` to reveal the key badges on the controls they trigger. The
+two are separate layers — `Alt` carries the actions, `Ctrl` the two filters — and
+each badge names its own modifier, so a letter never appears next to the wrong one.
 
 | Shortcut | Action |
 | --- | --- |

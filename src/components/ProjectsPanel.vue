@@ -10,6 +10,7 @@ import {
 } from "reka-ui"
 import { Folder, MessageSquare, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
+import ShortcutBadge from "./ShortcutBadge.vue"
 import Spinner from "./Spinner.vue"
 import type { SessionInfo } from "@/api/types"
 import { useApp } from "@/stores/app"
@@ -17,7 +18,7 @@ import { requestComposerFocus } from "@/stores/draft"
 import { filterTarget, stopFilter } from "@/stores/filter"
 import type { ProjectEntry } from "@/stores/projects"
 import { useSessionState } from "@/stores/sessionState"
-import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
+import { openRequests } from "@/stores/shortcuts"
 import { relativeTime } from "@/utils/format"
 import { fuzzyMatch } from "@/utils/fuzzy"
 
@@ -300,8 +301,11 @@ function onKeydown(event: KeyboardEvent) {
           @click.stop="toggleChats(entry)"
         >
           <ChevronRight :size="14" />
-          <kbd v-if="shortcutsVisible && isActive(entry)" class="kbd floating">L</kbd>
         </button>
+        <!-- On the row rather than the chevron: the chevron sits against the
+             window's left edge, where a badge wider than the control hangs off
+             the window. -->
+        <ShortcutBadge v-if="isActive(entry)" modifier="alt" key-label="L" />
 
         <button class="project-hit" @click="openProject(entry.directory)">
           <span class="line">

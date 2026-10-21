@@ -516,10 +516,15 @@ html[data-theme="dark"] .editor-code .hljs-tag {
 .kbd {
   font-family: var(--font-mono);
   font-size: 10.5px;
+  /* Badges are read as written, even on a heading that is uppercased. */
+  text-transform: none;
+  white-space: nowrap;
   line-height: 1;
   min-width: 16px;
   height: 16px;
-  padding: 0 4px;
+  /* Tight, because a prefixed badge has to sit beside a small control without
+     reaching its neighbour. */
+  padding: 0 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -528,7 +533,13 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   background: var(--bg-active);
   color: var(--text-muted);
 }
-.kbd.floating {
+/*
+ * The default badge placement: floating over the control's top-right corner. The
+ * class has to match what the component renders — while it was named `floating`
+ * here and `corner` there, badges fell back to being static, and holding a
+ * modifier grew whatever contained them.
+ */
+.kbd.corner {
   position: absolute;
   top: -6px;
   right: -6px;
