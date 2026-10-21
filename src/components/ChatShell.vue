@@ -12,7 +12,7 @@ import {
   PopoverRoot,
   PopoverTrigger,
 } from "reka-ui"
-import { X, CircleAlert, Check, Copy, ExternalLink, Link2, Link2Off, Moon, Share2, Sun, Wrench } from "lucide-vue-next"
+import { X, CircleAlert, Check, Copy, ExternalLink, Hash, Link2, Link2Off, Moon, Share2, Sun, Wrench } from "lucide-vue-next"
 import type { AssistantMessage } from "@/api/types"
 import Sidebar from "./Sidebar.vue"
 import SourceControl from "./SourceControl.vue"
@@ -80,6 +80,23 @@ const shareState = ref<"idle" | "shared" | "copied" | "unshared">("idle")
 
 /** Whether the open session currently has a public share link. */
 const isShared = computed(() => Boolean(current.value?.share?.url))
+
+/** Briefly confirm that the session id reached the clipboard. */
+const sessionCopied = ref(false)
+
+async function copySessionID() {
+  const id = current.value?.id
+  if (!id) return
+  try {
+    await navigator.clipboard.writeText(id)
+    sessionCopied.value = true
+    setTimeout(() => {
+      sessionCopied.value = false
+    }, 1500)
+  } catch {
+    /* clipboard unavailable */
+  }
+}
 
 function flashShare(state: "shared" | "copied" | "unshared") {
   shareState.value = state
@@ -443,6 +460,16 @@ onBeforeUnmount(() => {
             <Sun v-if="theme === 'dark'" :size="16" />
             <Moon v-else :size="16" />
           </button>
+          <button
+            class="app-btn"
+            :class="{ active: sessionCopied }"
+            :title="current ? `Copy session id (${current.id})` : 'No conversation open'"
+            aria-label="Copy session id"
+            @click="copySessionID"
+          >
+            <Check v-if="sessionCopied" :size="16" />
+            <Hash v-else :size="16" />
+          </button>
           <DropdownMenuRoot v-if="isShared">
             <DropdownMenuTrigger as-child>
               <button
@@ -648,6 +675,7 @@ onBeforeUnmount(() => {
   background: var(--bg-hover);
   color: var(--text);
 }
+.app-btn.active,
 .share-btn.copied,
 .share-btn.active {
   color: #4ade80;
