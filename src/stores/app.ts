@@ -258,6 +258,7 @@ export function useApp() {
     if (!client) return
     const target = directory ?? server.directory.value
     await sessions.remove(client, sessionID, target)
+    projects.forgetChat(sessionID)
     if (target === server.directory.value && !sessions.currentID.value && sessions.sorted.value[0]) {
       await selectSession(sessions.sorted.value[0].id)
     }

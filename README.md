@@ -10,7 +10,9 @@ conversations:
 
 - **Projects sidebar** — every project the server knows about, each showing one
   conversation: its newest. The list is ordered by most recent activity, and the
-  newest conversation of the busiest project is what opens on launch.
+  newest conversation of the busiest project is what opens on launch. The
+  chevron on a project row expands it to list that project's conversations
+  (newest first); `Alt`+`L` toggles the current project's row.
 - **Source Control panel** — a permanent right-hand panel that lists the uncommitted
   changes of the active project's repository as a flat list of file paths,
   grouped into *Staged Changes* and *Changes*, the way VS Code's Source Control
@@ -116,14 +118,14 @@ scripts/
   dev.mjs            Starts Vite, waits for the port, then launches Electron
 src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
   api/desktop.ts     Typed access to the preload bridge
-  stores/projects.ts One conversation per project
+  stores/projects.ts One conversation per project, plus its expanded chat list
   stores/git.ts      Source-control state: status polling, selection, diffs
   stores/layout.ts   Source-control panel width
   stores/desktopWindow.ts  Maximized state for the chromeless frame
   stores/sessionState.ts   Conversation state for every project and the tray
   stores/tray.ts     Rollup -> badge bitmap, tooltip and menu
   components/
-    ProjectsPanel.vue     Projects sidebar (one conversation per project)
+    ProjectsPanel.vue     Projects sidebar (expandable into per-project chats)
     SourceControl.vue     Right-hand source-control panel (flat, full paths)
     DiffViewer.vue        Split/unified diff view
     FileViewer.vue        Read-only file view
@@ -274,6 +276,7 @@ Hold `Alt` to reveal the key badges on the controls they trigger.
 | `Ctrl`+`R` | Filter the projects sidebar in place |
 | `Ctrl`+`P` | Filter the changed files in the source-control panel in place |
 | `Alt`+`P` / `Alt`+`S` | Focus the projects list (arrow keys + `Enter`) |
+| `Alt`+`L` | Expand or collapse the current project's conversations |
 | `Alt`+`N` | New conversation |
 | `Alt`+`F` | Search conversations |
 | `Alt`+`M` / `Alt`+`A` / `Alt`+`E` | Model / agent / effort |
@@ -315,9 +318,10 @@ log, because settings will not persist for that run.
 
 ## Notes and limitations
 
-- One conversation per project is deliberate: the sidebar shows each project's
-  newest conversation. Older conversations remain reachable through the
-  conversation search (`Alt`+`F`).
+- One conversation per project is deliberate: a collapsed project row shows its
+  newest conversation. The row's chevron (`Alt`+`L`) expands the project in
+  place to list all of its conversations; older ones are also reachable through
+  the conversation search (`Alt`+`F`).
 - Opening a project that has no conversation yet creates its first one.
 - Renaming and deleting the shown conversation are on the project row's hover
   menu; both work against the conversation's own project, so no project switch

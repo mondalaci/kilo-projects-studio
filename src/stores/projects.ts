@@ -18,6 +18,16 @@ const loaded = ref(false)
 /** How many projects still need their newest conversation fetched. */
 const pending = ref(0)
 
+/** How many conversations an expanded project row loads. */
+const CHATS_LIMIT = 50
+
+/** Project directories whose full conversation list is expanded in the sidebar. */
+const expanded = ref<Record<string, true>>({})
+/** Every conversation of a project, once its row has been expanded. */
+const chats = ref<Record<string, SessionInfo[]>>({})
+/** Projects whose conversation list is currently being fetched. */
+const chatsPending = ref<Record<string, true>>({})
+
 /** A project together with the conversation the sidebar shows for it. */
 export interface ProjectEntry {
   directory: string
@@ -42,6 +52,13 @@ function newestSession(list: SessionInfo[]): SessionInfo | null {
     const b = newest.time?.updated ?? newest.time?.created ?? 0
     return a > b ? session : newest
   })
+}
+
+/** Root conversations (no subagents), newest first. */
+function rootsByNewest(list: SessionInfo[]): SessionInfo[] {
+  return list
+    .filter((session) => !session.parentID)
+    .sort((a, b) => (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0))
 }
 
 /** Run `worker` over `items` with at most `limit` concurrent calls. */
@@ -103,10 +120,88 @@ export function useProjects() {
   /** Register a freshly created or updated conversation as a project's newest. */
   function setLatest(target: string | null | undefined, session: SessionInfo) {
     if (!target || session.parentID) return
+    upsertChat(target, session)
     const current = latest.value[target]
     const next = session.time?.updated ?? session.time?.created ?? 0
     const existing = current?.time?.updated ?? current?.time?.created ?? 0
     if (!current || next >= existing) latest.value = { ...latest.value, [target]: session }
+  }
+
+  /**
+   * Keep an expanded project's conversation list current. A no-op until the
+   * list has actually been fetched, so only expanded rows pay for it.
+   */
+  function upsertChat(directory: string, session: SessionInfo) {
+    const list = chats.value[directory]
+    if (!list) return
+    const index = list.findIndex((item) => item.id === session.id)
+    const next =
+      index === -1 ? [session, ...list] : list.map((item, i) => (i === index ? { ...item, ...session } : item))
+    chats.value = { ...chats.value, [directory]: rootsByNewest(next) }
+  }
+
+  /** Drop a deleted conversation from every expanded list. */
+  function forgetChat(sessionID: string) {
+    let changed = false
+    const next: Record<string, SessionInfo[]> = {}
+    for (const [directory, list] of Object.entries(chats.value)) {
+      if (list.some((item) => item.id === sessionID)) {
+        next[directory] = list.filter((item) => item.id !== sessionID)
+        changed = true
+      } else {
+        next[directory] = list
+      }
+    }
+    if (changed) chats.value = next
+  }
+
+  /** Whether a project row is showing its conversation list. */
+  function isExpanded(directory: string) {
+    return expanded.value[directory] === true
+  }
+
+  /** The conversations loaded for an expanded project, newest first. */
+  function chatsFor(directory: string) {
+    return chats.value[directory] ?? []
+  }
+
+  /** Whether an expanded project's conversation list is still loading. */
+  function isChatsLoading(directory: string) {
+    return chatsPending.value[directory] === true
+  }
+
+  /** Fetch a project's full conversation list (once) for its expanded row. */
+  async function loadChats(client: ServerClient, directory: string) {
+    if (chatsPending.value[directory]) return
+    chatsPending.value = { ...chatsPending.value, [directory]: true }
+    try {
+      const list = await client.listSessions({ directory, query: { limit: CHATS_LIMIT } })
+      chats.value = { ...chats.value, [directory]: rootsByNewest(list) }
+    } catch {
+      /* leave whatever was there (usually nothing) in place */
+    } finally {
+      const next = { ...chatsPending.value }
+      delete next[directory]
+      chatsPending.value = next
+    }
+  }
+
+  /** Collapse a project row (its loaded list is kept for the next expand). */
+  function collapse(directory: string) {
+    if (!(directory in expanded.value)) return
+    const next = { ...expanded.value }
+    delete next[directory]
+    expanded.value = next
+  }
+
+  /** Expand or collapse a project row, fetching its conversations on expand. */
+  async function toggleExpanded(client: ServerClient, directory: string) {
+    if (isExpanded(directory)) {
+      collapse(directory)
+      return
+    }
+    expanded.value = { ...expanded.value, [directory]: true }
+    if (!chats.value[directory]) await loadChats(client, directory)
   }
 
   /**
@@ -156,6 +251,9 @@ export function useProjects() {
     if (type === "session.created" || type === "session.updated") {
       const info = properties.info as SessionInfo | undefined
       if (info?.directory && !info.parentID) setLatest(info.directory, info)
+    } else if (type === "session.deleted") {
+      const id = (properties.sessionID as string) ?? (properties.info as SessionInfo | undefined)?.id
+      if (id) forgetChat(id)
     }
   }
 
@@ -164,6 +262,9 @@ export function useProjects() {
     loaded.value = false
     pending.value = 0
     loading.value = false
+    expanded.value = {}
+    chats.value = {}
+    chatsPending.value = {}
   }
 
   return {
@@ -178,6 +279,13 @@ export function useProjects() {
     projectName,
     latestFor,
     setLatest,
+    forgetChat,
+    isExpanded,
+    chatsFor,
+    isChatsLoading,
+    loadChats,
+    collapse,
+    toggleExpanded,
     load,
     refreshOne,
     applyEvent,

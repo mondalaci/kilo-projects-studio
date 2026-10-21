@@ -286,6 +286,10 @@ function onKeyDown(event: KeyboardEvent) {
       event.preventDefault()
       requestOpen("sessions")
       break
+    case shortcutKeys.chats:
+      event.preventDefault()
+      requestOpen("chats")
+      break
     case shortcutKeys.search:
       event.preventDefault()
       openSearch()

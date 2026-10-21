@@ -8,24 +8,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "reka-ui"
-import { Folder, GitBranch, MessageSquare, MoreHorizontal, Pencil, Trash2 } from "lucide-vue-next"
+import { Folder, GitBranch, MessageSquare, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
 import Spinner from "./Spinner.vue"
+import type { SessionInfo } from "@/api/types"
 import { useApp } from "@/stores/app"
 import { filterTarget, stopFilter } from "@/stores/filter"
 import type { ProjectEntry } from "@/stores/projects"
 import { useSessionState } from "@/stores/sessionState"
-import { openRequests } from "@/stores/shortcuts"
+import { openRequests, shortcutsVisible } from "@/stores/shortcuts"
 import { relativeTime } from "@/utils/format"
 import { fuzzyMatch } from "@/utils/fuzzy"
 
 const app = useApp()
-const { entries, loading, pending, current } = app.projects
-const { openProject, removeSession, renameSession } = app
+const { entries, loading, pending, current, isExpanded, chatsFor, isChatsLoading, toggleExpanded } = app.projects
+const { openProject, removeSession, renameSession, selectSession, switchProject } = app
 const { stateFor, reasonFor } = useSessionState()
 
-/** The project whose conversation title is being edited inline. */
-const editing = ref<string | null>(null)
+/** The conversation whose title is being edited inline, and its project. */
+const editing = ref<{ id: string; directory: string } | null>(null)
 const editTitle = ref("")
 const editInput = ref<HTMLInputElement | null>(null)
 
@@ -107,6 +108,11 @@ function conversationStateTitle(entry: ProjectEntry) {
 
 /* ------------------------------- inline rename ------------------------------ */
 
+/** Whether a conversation's title is currently being edited inline. */
+function isEditing(sessionID: string | undefined) {
+  return Boolean(sessionID) && editing.value?.id === sessionID
+}
+
 function setRenameInput(el: Element | { $el?: Element } | null) {
   if (!el) {
     editInput.value = null
@@ -116,29 +122,50 @@ function setRenameInput(el: Element | { $el?: Element } | null) {
   editInput.value = node instanceof HTMLInputElement ? node : null
 }
 
-async function startRename(entry: ProjectEntry) {
-  if (!entry.session) return
-  editing.value = entry.directory
-  editTitle.value = entry.session.title || ""
+async function startRename(session: SessionInfo, directory: string) {
+  editing.value = { id: session.id, directory }
+  editTitle.value = session.title || ""
   await nextTick()
   editInput.value?.focus()
   editInput.value?.select()
 }
 
 async function commitRename() {
-  const directory = editing.value
-  const entry = entries.value.find((item) => item.directory === directory)
-  const session = entry?.session
+  const target = editing.value
   editing.value = null
+  if (!target) return
   const title = editTitle.value.trim()
-  if (!session || !title || title === session.title) return
+  const previous =
+    chatsFor(target.directory).find((item) => item.id === target.id)?.title ??
+    entries.value.find((entry) => entry.directory === target.directory)?.session?.title
+  if (!title || title === previous) return
   // Rename against the conversation's own project, so a row that is not the
   // active project can be renamed without switching the whole app over to it.
-  await renameSession(session.id, title, entry.directory)
+  await renameSession(target.id, title, target.directory)
 }
 
 function cancelRename() {
   editing.value = null
+}
+
+/* ------------------------------- chat list ------------------------------- */
+
+/** Reveal or hide a project row's conversation list. */
+function toggleChats(entry: ProjectEntry) {
+  const client = app.connection.client.value
+  if (!client) return
+  void toggleExpanded(client, entry.directory)
+}
+
+/** The conversations shown under an expanded row (all of them, newest first). */
+function projectChats(entry: ProjectEntry) {
+  return chatsFor(entry.directory)
+}
+
+/** Open one conversation, switching to its project first when it lives elsewhere. */
+async function openChat(entry: ProjectEntry, chat: SessionInfo) {
+  if (!isActive(entry)) await switchProject(entry.directory)
+  await selectSession(chat.id)
 }
 
 /* ------------------------------- list keyboard nav ------------------------------- */
@@ -146,6 +173,18 @@ function cancelRename() {
 function scrollNavIntoView() {
   const items = navEl.value?.querySelectorAll<HTMLElement>(".project")
   items?.[navIndex.value]?.scrollIntoView({ block: "nearest" })
+}
+
+/** Bring the row for a directory into view (used after Alt+L expands it). */
+function scrollProjectIntoView(directory: string) {
+  const items = navEl.value?.querySelectorAll<HTMLElement>(".project")
+  if (!items) return
+  for (const el of items) {
+    if (el.dataset.dir === directory) {
+      el.scrollIntoView({ block: "nearest" })
+      return
+    }
+  }
 }
 
 const navEl = ref<HTMLElement | null>(null)
@@ -163,6 +202,18 @@ watch(
       navEl.value?.focus()
       scrollNavIntoView()
     })
+  },
+)
+
+// Alt+L expands (or collapses) the active project's conversation list, so the
+// current project's chats are one keystroke away without reaching for the mouse.
+watch(
+  () => openRequests.chats,
+  () => {
+    const directory = current.value
+    const client = app.connection.client.value
+    if (!directory || !client) return
+    void toggleExpanded(client, directory).then(() => nextTick(() => scrollProjectIntoView(directory)))
   },
 )
 
@@ -234,11 +285,24 @@ function onKeydown(event: KeyboardEvent) {
         class="project"
         :class="{
           active: isActive(entry),
+          expanded: isExpanded(entry.directory),
           'kb-active': index === navIndex,
           'cursor-active': filtering && index === cursor,
         }"
         :title="entry.directory"
+        :data-dir="entry.directory"
       >
+        <button
+          class="chevron"
+          :class="{ open: isExpanded(entry.directory) }"
+          :title="isExpanded(entry.directory) ? 'Hide chats (Alt+L)' : 'Show chats (Alt+L)'"
+          :aria-expanded="isExpanded(entry.directory)"
+          @click.stop="toggleChats(entry)"
+        >
+          <ChevronRight :size="14" />
+          <kbd v-if="shortcutsVisible && isActive(entry)" class="kbd floating">L</kbd>
+        </button>
+
         <button class="project-hit" @click="openProject(entry.directory)">
           <span class="line">
             <Folder :size="13" class="folder" />
@@ -247,14 +311,16 @@ function onKeydown(event: KeyboardEvent) {
             <Spinner v-if="isPending(entry)" :size="11" />
             <span v-else class="time">{{ conversationTime(entry) }}</span>
           </span>
-          <span class="line conversation">
+          <!-- The newest conversation is the collapsed summary; once expanded the
+               full list below carries it instead. -->
+          <span v-if="!isExpanded(entry.directory)" class="line conversation">
             <span
               class="state-dot"
               :class="conversationState(entry)"
               :title="conversationStateTitle(entry)"
             ></span>
             <input
-              v-if="editing === entry.directory"
+              v-if="isEditing(entry.session?.id)"
               :ref="setRenameInput"
               v-model="editTitle"
               class="rename"
@@ -267,13 +333,44 @@ function onKeydown(event: KeyboardEvent) {
           </span>
         </button>
 
-        <DropdownMenuRoot v-if="entry.session && editing !== entry.directory">
+        <div v-if="isExpanded(entry.directory)" class="chats">
+          <p v-if="isChatsLoading(entry.directory)" class="chats-note"><Spinner :size="11" /> Loading chats…</p>
+          <template v-else>
+            <button
+              v-for="chat in projectChats(entry)"
+              :key="chat.id"
+              class="chat"
+              :class="{ current: chat.id === app.sessions.currentID.value }"
+              @click="openChat(entry, chat)"
+            >
+              <span class="state-dot" :class="stateFor(chat.id)" :title="reasonFor(chat.id)"></span>
+              <input
+                v-if="isEditing(chat.id)"
+                :ref="setRenameInput"
+                v-model="editTitle"
+                class="rename"
+                @click.stop
+                @keydown.enter.prevent="commitRename"
+                @keydown.esc.prevent="cancelRename"
+                @blur="commitRename"
+              />
+              <span v-else class="chat-title">{{ chat.title || "Untitled" }}</span>
+              <span class="chat-time">{{ relativeTime(chat.time?.updated ?? chat.time?.created) }}</span>
+            </button>
+            <p v-if="!projectChats(entry).length" class="chats-note">No conversations yet.</p>
+          </template>
+        </div>
+
+        <DropdownMenuRoot v-if="entry.session && !isEditing(entry.session.id)">
           <DropdownMenuTrigger as-child>
             <span class="project-menu" title="Conversation actions" @click.stop><MoreHorizontal :size="14" /></span>
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
             <DropdownMenuContent class="kilo-menu" :side-offset="4" align="start">
-              <DropdownMenuItem class="kilo-menu-item" @select="startRename(entry)">
+              <DropdownMenuItem
+                class="kilo-menu-item"
+                @select="entry.session && startRename(entry.session, entry.directory)"
+              >
                 <Pencil :size="14" /> Rename conversation
               </DropdownMenuItem>
               <DropdownMenuSeparator class="kilo-menu-sep" />
@@ -315,6 +412,8 @@ function onKeydown(event: KeyboardEvent) {
 .project {
   position: relative;
   border-radius: var(--radius-sm);
+  /* Chat rows line their state dot up with the summary line's, under the name. */
+  --chats-indent: 46px;
 }
 .project:hover {
   background: var(--bg-hover);
@@ -332,13 +431,83 @@ function onKeydown(event: KeyboardEvent) {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 6px 9px;
+  /* Left padding leaves room for the absolutely positioned chevron. */
+  padding: 6px 9px 6px 27px;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);
   text-align: left;
   width: 100%;
   min-width: 0;
+}
+/* The disclosure control that reveals a project's other chats. */
+.chevron {
+  position: absolute;
+  top: 5px;
+  left: 4px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 5px;
+}
+.chevron:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+.chevron svg {
+  transition: transform 0.12s ease;
+}
+.chevron.open svg {
+  transform: rotate(90deg);
+}
+/* The expanded conversation list. */
+.chats {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 3px;
+}
+.chat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 9px 4px var(--chats-indent);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+.chat:hover {
+  background: var(--bg-active);
+}
+/* The open conversation is marked on its title, like the search results. */
+.chat.current .chat-title {
+  color: var(--accent);
+  font-weight: 600;
+}
+.chat-time {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.chats-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 9px 4px var(--chats-indent);
+  font-size: 11.5px;
+  color: var(--text-faint);
 }
 .line {
   display: flex;
