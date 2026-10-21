@@ -1,0 +1,37 @@
+{
+  "name": "kilo-projects-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Electron desktop studio for Kilo Code / opencode projects: one conversation per project plus a source-control panel with diffs",
+  "author": "mondalaci",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "icon": "convert -background none build/icon.svg -resize 512x512 build/icon.png && convert -background none build/tray.svg -resize 64x64 build/tray.png",
+    "app": "electron .",
+    "app:dev": "node scripts/dev.mjs",
+    "app:build": "vite build && electron ."
+  },
+  "dependencies": {
+    "dompurify": "^3.4.16",
+    "highlight.js": "^11.12.0",
+    "lucide-vue-next": "^1.0.0",
+    "marked": "^18.0.14",
+    "mermaid": "^12.1.0",
+    "reka-ui": "^2.10.5",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "electron": "^45.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vue-tsc": "^3.1.1"
+  }
+}

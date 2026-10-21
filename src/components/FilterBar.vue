@@ -1,0 +1,149 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, ref, watch } from "vue"
+import { X } from "lucide-vue-next"
+import { filterTarget } from "@/stores/filter"
+
+/**
+ * Incremental filter bar for a sidebar list.
+ *
+ * Ctrl+R targets the projects list and Ctrl+P the source-control list; both use
+ * this bar, so the list is narrowed in place rather than in an overlay. The list
+ * itself stays in charge of what matches — the bar only reports the query and the
+ * keyboard intent (move the cursor, open the current row, close).
+ */
+const props = defineProps<{
+  target: "projects" | "changes"
+  placeholder: string
+  /** Items currently shown, and how many the list holds before filtering. */
+  shown: number
+  total: number
+}>()
+
+const emit = defineEmits<{
+  (event: "update:query", query: string): void
+  (event: "move", delta: number): void
+  (event: "open"): void
+  (event: "close"): void
+}>()
+
+const input = ref<HTMLInputElement | null>(null)
+const query = ref("")
+
+// The bar is mounted *because* the target was requested (the v-if matches), so
+// focus on mount as well as on later changes.
+onMounted(() => {
+  if (filterTarget.value !== props.target) return
+  void nextTick(() => {
+    input.value?.focus()
+    input.value?.select()
+  })
+})
+
+// Ctrl+R / Ctrl+P focus the bar and select whatever is there, so typing starts
+// a new filter rather than appending to the old one.
+watch(
+  () => filterTarget.value,
+  async (target) => {
+    if (target !== props.target) return
+    await nextTick()
+    input.value?.focus()
+    input.value?.select()
+    if (!query.value) emit("update:query", "")
+  },
+)
+
+watch(query, (value) => emit("update:query", value))
+
+function onKeydown(event: KeyboardEvent) {
+  switch (event.key) {
+    case "Escape":
+      event.preventDefault()
+      event.stopPropagation()
+      query.value = ""
+      emit("close")
+      break
+    case "Enter":
+      event.preventDefault()
+      emit("open")
+      break
+    case "ArrowDown":
+      event.preventDefault()
+      emit("move", 1)
+      break
+    case "ArrowUp":
+      event.preventDefault()
+      emit("move", -1)
+      break
+    default:
+      break
+  }
+}
+
+function clear() {
+  query.value = ""
+  emit("close")
+}
+
+defineExpose({
+  reset: () => {
+    query.value = ""
+  },
+})
+
+/** Whether the list currently hides anything, for the "n of m" readout. */
+const filtered = computed(() => props.shown !== props.total)
+</script>
+
+<template>
+  <div class="filter-bar">
+    <input
+      ref="input"
+      v-model="query"
+      class="filter-input"
+      type="text"
+      :placeholder="placeholder"
+      spellcheck="false"
+      autocomplete="off"
+      @keydown="onKeydown"
+    />
+    <span v-if="filtered" class="filter-count">{{ shown }}/{{ total }}</span>
+    <button class="editor-icon" title="Clear filter (Esc)" @click="clear"><X :size="14" /></button>
+  </div>
+</template>
+
+<style scoped>
+.filter-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  /* The bars sit outside the drag regions, but never opt into them. */
+  -webkit-app-region: no-drag;
+}
+.filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+}
+.filter-input:focus {
+  border-color: var(--accent);
+}
+.filter-input::placeholder {
+  color: var(--text-faint);
+}
+.filter-count {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+</style>

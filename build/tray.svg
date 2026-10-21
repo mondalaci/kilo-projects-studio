@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Kilo Projects Studio tray icon</title>
+  <!--
+    The tray icon before the renderer sends its first badge: the same monochrome
+    "K" the app draws, with the idle dot. Kept in step with src/utils/trayIcon.ts
+    so the handover is invisible.
+  -->
+  <text x="26.9" y="40" fill="#ffffff" stroke="rgba(0,0,0,0.45)" stroke-width="2.2" stroke-linejoin="round"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'DejaVu Sans', sans-serif"
+        font-size="46" font-weight="600" text-anchor="middle">K</text>
+  <circle cx="55" cy="55" r="10.6" fill="rgba(0,0,0,0.4)" />
+  <circle cx="55" cy="55" r="9.6" fill="#c2c2c2" />
+</svg>

@@ -1,0 +1,197 @@
+/**
+ * Unified-diff parsing and split-view alignment.
+ *
+ * The patch text comes from `git diff`, so it is already in unified format; the
+ * job here is to turn it into rows a viewer can render with line numbers, both
+ * as a single column ("unified") and as old/new columns ("split").
+ */
+
+export type DiffLineType = "context" | "add" | "del" | "note"
+
+export interface DiffLine {
+  type: DiffLineType
+  /** Line content without the leading +/-/space marker. */
+  text: string
+  /** 1-based line number in the old file, or null for added lines. */
+  oldNo: number | null
+  /** 1-based line number in the new file, or null for deleted lines. */
+  newNo: number | null
+}
+
+export interface DiffHunk {
+  header: string
+  /** The trailing function/section name git prints after the range. */
+  section?: string
+  oldStart: number
+  oldCount: number
+  newStart: number
+  newCount: number
+  lines: DiffLine[]
+}
+
+export interface ParsedDiff {
+  oldPath?: string
+  newPath?: string
+  /** `--git a/x b/y`, `new file mode`, … in order, for the meta strip. */
+  meta: string[]
+  hunks: DiffHunk[]
+  additions: number
+  deletions: number
+  binary: boolean
+  /** A mode-only change produces a patch with no hunks. */
+  modeOnly: boolean
+}
+
+const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
+
+/** Parse a single-file unified diff. */
+export function parseDiff(patch: string): ParsedDiff {
+  const result: ParsedDiff = { meta: [], hunks: [], additions: 0, deletions: 0, binary: false, modeOnly: false }
+  if (!patch) return result
+
+  const lines = patch.split("\n")
+  // `split` leaves a trailing empty string for a patch ending in a newline.
+  if (lines.length && lines[lines.length - 1] === "") lines.pop()
+
+  let hunk: DiffHunk | null = null
+  let oldNo = 0
+  let newNo = 0
+
+  for (const raw of lines) {
+    if (raw.startsWith("GIT binary patch") || /^Binary files .* differ$/.test(raw)) {
+      result.binary = true
+      hunk = null
+      continue
+    }
+
+    const match = HUNK_RE.exec(raw)
+    if (match) {
+      hunk = {
+        header: raw,
+        section: match[5].trim() || undefined,
+        oldStart: Number(match[1]),
+        oldCount: match[2] === undefined ? 1 : Number(match[2]),
+        newStart: Number(match[3]),
+        newCount: match[4] === undefined ? 1 : Number(match[4]),
+        lines: [],
+      }
+      result.hunks.push(hunk)
+      oldNo = hunk.oldStart
+      newNo = hunk.newStart
+      continue
+    }
+
+    if (hunk) {
+      const marker = raw[0]
+      if (marker === "+") {
+        hunk.lines.push({ type: "add", text: raw.slice(1), oldNo: null, newNo: newNo++ })
+        result.additions++
+      } else if (marker === "-") {
+        hunk.lines.push({ type: "del", text: raw.slice(1), oldNo: oldNo++, newNo: null })
+        result.deletions++
+      } else if (marker === "\\") {
+        hunk.lines.push({ type: "note", text: raw.slice(1).trim(), oldNo: null, newNo: null })
+      } else if (marker === " " || raw === "") {
+        hunk.lines.push({ type: "context", text: raw.slice(1), oldNo: oldNo++, newNo: newNo++ })
+      } else {
+        // Anything else ends the hunk body (e.g. a trailing diff header).
+        hunk = null
+      }
+      continue
+    }
+
+    if (raw.startsWith("--- ")) {
+      const value = raw.slice(4)
+      result.oldPath = value === "/dev/null" ? undefined : stripPrefix(value)
+      continue
+    }
+    if (raw.startsWith("+++ ")) {
+      const value = raw.slice(4)
+      result.newPath = value === "/dev/null" ? undefined : stripPrefix(value)
+      continue
+    }
+    if (raw.startsWith("diff --git ")) {
+      // Paths in this header may be quoted when they contain spaces.
+      const rest = raw.slice("diff --git ".length)
+      const parts = rest.match(/^(".*?"|\S+)\s+(".*?"|\S+)$/)
+      if (parts) {
+        result.oldPath = stripPrefix(parts[1].replace(/^"|"$/g, ""))
+        result.newPath = stripPrefix(parts[2].replace(/^"|"$/g, ""))
+      }
+      continue
+    }
+    if (raw.trim()) result.meta.push(raw.trim())
+  }
+
+  if (result.binary) {
+    result.hunks = []
+    result.modeOnly = false
+  } else if (!result.hunks.length) {
+    result.modeOnly = patch.trim().length > 0
+  }
+  return result
+}
+
+/** Drop the a/ or b/ prefix git puts on diff paths. */
+function stripPrefix(value: string): string {
+  return value.replace(/^[ab]\//, "")
+}
+
+/** One renderable row of the split (side-by-side) view. */
+export type SplitRow =
+  | { kind: "line"; left: DiffLine | null; right: DiffLine | null }
+  | { kind: "note"; text: string }
+
+/**
+ * Pair a hunk's lines into old/new columns: deletions and the additions that
+ * replace them share a row, and context lines appear on both sides.
+ */
+export function toSplitRows(lines: DiffLine[]): SplitRow[] {
+  const rows: SplitRow[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index]
+
+    if (line.type === "context") {
+      rows.push({ kind: "line", left: line, right: line })
+      index++
+      continue
+    }
+    if (line.type === "note") {
+      rows.push({ kind: "note", text: line.text })
+      index++
+      continue
+    }
+
+    const removed: DiffLine[] = []
+    const added: DiffLine[] = []
+    while (index < lines.length && lines[index].type === "del") removed.push(lines[index++])
+    while (index < lines.length && lines[index].type === "add") added.push(lines[index++])
+
+    if (!removed.length && !added.length) {
+      index++
+      continue
+    }
+    const height = Math.max(removed.length, added.length)
+    for (let i = 0; i < height; i++) {
+      rows.push({ kind: "line", left: removed[i] ?? null, right: added[i] ?? null })
+    }
+  }
+
+  return rows
+}
+
+/** `+3 −1`-style counts for a parsed patch. */
+export function diffStat(diff: ParsedDiff): { additions: number; deletions: number } {
+  return { additions: diff.additions, deletions: diff.deletions }
+}
+
+/**
+ * The basename and directory of a repository-relative path, for compact rows.
+ */
+export function splitPath(path: string): { base: string; dir: string } {
+  const index = path.lastIndexOf("/")
+  if (index === -1) return { base: path, dir: "" }
+  return { base: path.slice(index + 1), dir: path.slice(0, index) }
+}

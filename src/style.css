@@ -1,0 +1,550 @@
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --content-width: 46rem;
+  --sidebar-width: 264px;
+  --scm-width: 300px;
+  --header-height: 40px;
+
+  /*
+   * File rows in the source-control list. The directory takes whichever muted
+   * step the active theme sets (resolved at use, so one definition covers both
+   * themes) and the file name is the reverse of white. Only the value that
+   * differs per theme is overridden below.
+   */
+  --path-dir: var(--text-muted);
+  --path-name: #000000;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #212121;
+  --bg-elevated: #2a2a2a;
+  --bg-sidebar: #171717;
+  --bg-input: #303030;
+  --bg-hover: #2f2f2f;
+  --bg-active: #383838;
+  --bubble-user: #303030;
+  --bubble-assistant: transparent;
+  --text: #ececec;
+  --text-muted: #9b9b9b;
+  --text-faint: #6e6e6e;
+  --path-name: #ffffff;
+  --border: #3a3a3a;
+  --border-strong: #4a4a4a;
+  --accent: #d97757;
+  --accent-hover: #e08a6d;
+  --accent-text: #ffffff;
+  --code-bg: #0f0f0f;
+  --code-border: #333;
+  --danger: #ef6b6b;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --scroll-thumb: #4a4a4a;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-elevated: #f7f7f8;
+  --bg-sidebar: #f4f4f5;
+  --bg-input: #ffffff;
+  --bg-hover: #ececec;
+  --bg-active: #e3e3e4;
+  --bubble-user: #f1f1f2;
+  --bubble-assistant: transparent;
+  --text: #1c1c1e;
+  --text-muted: #6b6b70;
+  --text-faint: #9a9aa0;
+
+  --border: #e2e2e4;
+  --border-strong: #cfcfd4;
+  --accent: #c96442;
+  --accent-hover: #b85738;
+  --accent-text: #ffffff;
+  --code-bg: #0f172a;
+  --code-border: #1e293b;
+  --danger: #d64545;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --scroll-thumb: #c4c4c8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * The Electron window is chromeless: the header strips at the top of each panel
+ * are the window's only grip, so they must be draggable. Anything interactive
+ * opts out, otherwise dragging would win over clicking.
+ */
+.drag-region {
+  -webkit-app-region: drag;
+}
+button,
+input,
+textarea,
+select,
+a[href],
+summary,
+[role="button"],
+[role="menuitem"],
+[contenteditable="true"] {
+  -webkit-app-region: no-drag;
+}
+
+/* While a resize grip is dragged the pointer leaves the grip, so the cursor is
+   pinned document-wide for the duration. */
+html.window-resizing,
+html.window-resizing * {
+  cursor: var(--kilo-resize-cursor, default) !important;
+  user-select: none !important;
+}
+
+/* Square icon button used in the header strips (editor area and source control).
+   Global because those headers are separate components whose slotted content
+   cannot be reached by a scoped rule. */
+.editor-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+.editor-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Markdown */
+.markdown {
+  overflow-wrap: anywhere;
+}
+.markdown > *:first-child {
+  margin-top: 0;
+}
+.markdown > *:last-child {
+  margin-bottom: 0;
+}
+.markdown p {
+  margin: 0 0 0.85em;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 1.3em 0 0.6em;
+  line-height: 1.3;
+  font-weight: 650;
+}
+.markdown h1 {
+  font-size: 1.5em;
+}
+.markdown h2 {
+  font-size: 1.25em;
+}
+.markdown h3 {
+  font-size: 1.1em;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0 0 0.85em;
+  padding-left: 1.4em;
+}
+.markdown li {
+  margin: 0.25em 0;
+}
+.markdown blockquote {
+  margin: 0 0 0.85em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.markdown pre {
+  margin: 0 0 0.9em;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius);
+  overflow: auto;
+}
+.markdown pre code {
+  display: block;
+  padding: 1.1em 1.25em;
+  background: transparent;
+  color: #d6deeb;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.6;
+  white-space: pre;
+}
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  padding: 0.12em 0.35em;
+  border-radius: 5px;
+}
+.markdown pre code {
+  background: transparent;
+}
+
+/* Code block with a hover copy button. */
+.markdown .code-block {
+  position: relative;
+  margin: 0 0 0.9em;
+}
+.markdown .code-block pre {
+  margin: 0;
+}
+.markdown .code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--code-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: #d6deeb;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+.markdown .code-block:hover .code-copy {
+  opacity: 1;
+}
+.markdown .code-copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.markdown .code-copy.copied {
+  color: #4ade80;
+  border-color: color-mix(in srgb, #4ade80 50%, transparent);
+}
+.markdown table {
+  border-collapse: collapse;
+  margin: 0 0 0.9em;
+  display: block;
+  overflow-x: auto;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 0.4em 0.7em;
+  text-align: left;
+  overflow-wrap: break-word;
+}
+.markdown th {
+  background: var(--bg-elevated);
+}
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.2em 0;
+}
+.markdown img {
+  max-width: 100%;
+  border-radius: var(--radius);
+}
+
+.markdown .mermaid-diagram {
+  margin: 0 0 0.9em;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  text-align: center;
+}
+.markdown .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+ * highlight.js inside the message code blocks, which always sit on the dark
+ * `--code-bg` surface, so one dark palette covers both themes.
+ */
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #ff7b72;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-tag {
+  color: #a5d6ff;
+}
+.hljs-number,
+.hljs-symbol {
+  color: #79c0ff;
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: #d2a8ff;
+}
+.hljs-variable,
+.hljs-name,
+.hljs-tag {
+  color: #7ee787;
+}
+.hljs-built_in {
+  color: #ffa657;
+}
+.hljs-meta {
+  color: #8b949e;
+}
+
+/* Shared overlay primitives (Reka UI is unstyled) */
+.kilo-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  animation: kilo-fade 0.12s ease;
+}
+/*
+ * highlight.js on the editor surfaces (diff and file views). Unlike the message
+ * code blocks these sit on the app background, so the palette follows the theme.
+ */
+.editor-code .hljs-comment,
+.editor-code .hljs-quote,
+.editor-code .hljs-meta {
+  color: #6a737d;
+}
+.editor-code .hljs-keyword,
+.editor-code .hljs-selector-tag,
+.editor-code .hljs-literal,
+.editor-code .hljs-type {
+  color: #d73a49;
+}
+.editor-code .hljs-string,
+.editor-code .hljs-attr,
+.editor-code .hljs-template-tag {
+  color: #032f62;
+}
+.editor-code .hljs-number,
+.editor-code .hljs-symbol,
+.editor-code .hljs-built_in {
+  color: #005cc5;
+}
+.editor-code .hljs-title,
+.editor-code .hljs-title.class_,
+.editor-code .hljs-title.function_ {
+  color: #6f42c1;
+}
+.editor-code .hljs-variable,
+.editor-code .hljs-name {
+  color: #e36209;
+}
+.editor-code .hljs-tag {
+  color: #22863a;
+}
+
+html[data-theme="dark"] .editor-code .hljs-comment,
+html[data-theme="dark"] .editor-code .hljs-quote,
+html[data-theme="dark"] .editor-code .hljs-meta {
+  color: #8b949e;
+}
+html[data-theme="dark"] .editor-code .hljs-keyword,
+html[data-theme="dark"] .editor-code .hljs-selector-tag,
+html[data-theme="dark"] .editor-code .hljs-literal,
+html[data-theme="dark"] .editor-code .hljs-type {
+  color: #ff7b72;
+}
+html[data-theme="dark"] .editor-code .hljs-string,
+html[data-theme="dark"] .editor-code .hljs-attr,
+html[data-theme="dark"] .editor-code .hljs-template-tag {
+  color: #a5d6ff;
+}
+html[data-theme="dark"] .editor-code .hljs-number,
+html[data-theme="dark"] .editor-code .hljs-symbol,
+html[data-theme="dark"] .editor-code .hljs-built_in {
+  color: #79c0ff;
+}
+html[data-theme="dark"] .editor-code .hljs-title,
+html[data-theme="dark"] .editor-code .hljs-title.class_,
+html[data-theme="dark"] .editor-code .hljs-title.function_ {
+  color: #d2a8ff;
+}
+html[data-theme="dark"] .editor-code .hljs-variable,
+html[data-theme="dark"] .editor-code .hljs-name {
+  color: #ffa657;
+}
+html[data-theme="dark"] .editor-code .hljs-tag {
+  color: #7ee787;
+}
+
+.kilo-menu {
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 5px;
+  z-index: 60;
+  animation: kilo-pop 0.12s ease;
+}
+.kilo-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+}
+.kilo-menu-item[data-highlighted] {
+  background: var(--bg-hover);
+}
+.kilo-menu-item.danger {
+  color: var(--danger);
+}
+.kilo-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px;
+}
+
+/* Shortcut key badge shown while the modifier is held. */
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-active);
+  color: var(--text-muted);
+}
+.kbd.floating {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.kilo-dialog {
+  position: fixed;
+  z-index: 50;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 64px));
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: kilo-pop 0.14s ease;
+}
+.kilo-dialog-title {
+  padding: 16px 18px 10px;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+@keyframes kilo-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes kilo-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+.kilo-menu {
+  animation: kilo-menu-pop 0.1s ease;
+}
+@keyframes kilo-menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
