@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import { Minus, Plus, RefreshCw } from "lucide-vue-next"
+import { Minus, Plus } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
-import Spinner from "./Spinner.vue"
 import WindowControls from "./WindowControls.vue"
 import { filterTarget, stopFilter } from "@/stores/filter"
 import { useGit, type GitRow } from "@/stores/git"
@@ -152,12 +151,13 @@ function parts(path: string) {
 <template>
   <aside class="scm">
     <header class="scm-head drag-region">
-      <span class="scm-title">Source Control</span>
+      <span class="scm-title">Diff</span>
+      <span
+        v-if="repo.isRepo"
+        class="count-pill"
+        :title="`${total} uncommitted ${total === 1 ? 'change' : 'changes'}`"
+      >{{ total }}</span>
       <span v-if="repo.isRepo && repo.branch" class="branch" :title="rootLabel ?? ''">{{ repo.branch }}</span>
-      <button class="editor-icon" :title="loading ? 'Refreshing…' : 'Refresh changes'" @click="git.refresh()">
-        <Spinner v-if="loading" :size="13" />
-        <RefreshCw v-else :size="14" />
-      </button>
       <!-- The panel cannot be hidden, so its header is always the rightmost
            strip of the window: that is where the window buttons live. -->
       <WindowControls />
@@ -209,11 +209,7 @@ function parts(path: string) {
       </section>
 
       <section v-if="changeFiltered.length" class="group">
-        <div class="group-head">
-          <span class="group-name">Changes</span>
-          <span class="group-count">{{ changeFiltered.length }}</span>
-        </div>
-        <ul class="files">
+        <ul class="files" :class="{ 'files-first': !stagedFiltered.length }">
           <li v-for="row in changeFiltered" :key="`c:${row.path}`" class="file-row">
             <button
               class="file"
@@ -277,6 +273,17 @@ function parts(path: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The change count, beside the title: what the removed group header used to say. */
+.count-pill {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-active);
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 .branch {
   flex: none;
@@ -348,6 +355,10 @@ function parts(path: string) {
   border-radius: 999px;
   padding: 0 6px;
   font-size: 10.5px;
+}
+/* Without a group header above it, the list keeps its own top spacing. */
+.files-first {
+  padding-top: 6px;
 }
 .files {
   list-style: none;

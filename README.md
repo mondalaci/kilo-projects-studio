@@ -13,10 +13,12 @@ conversations:
   newest conversation of the busiest project is what opens on launch. The
   chevron on a project row expands it to list that project's conversations
   (newest first); `Alt`+`L` toggles the current project's row.
-- **Source Control panel** — a permanent right-hand panel that lists the uncommitted
-  changes of the active project's repository as a flat list of file paths,
-  grouped into *Staged Changes* and *Changes*, the way VS Code's Source Control
-  view does.
+- **Diff panel** — a permanent right-hand panel listing the uncommitted changes of
+  the active project's repository as a flat list of file paths, with the count
+  beside the title and the staged ones under their own heading. It re-scans the
+  working tree on a timer, so there is nothing to refresh by hand; the file names
+  keep their two-tone scheme (a dimmer directory leading to a bright file name)
+  and the status lives in the letter beside them.
 - **Diffs** — clicking a file in that panel opens it in the editor area: the
   whole file on both sides, split or unified, with line numbers, syntax
   highlighting, `+n −m` statistics, a change map down the right edge and change
@@ -285,10 +287,11 @@ Hold `Alt` to reveal the key badges on the controls they trigger.
 | `Alt`+`L` | Expand or collapse the current project's conversations |
 | `Alt`+`N` | New conversation |
 | `Alt`+`F` | Search conversations |
+| `Alt`+`T` | Expand or collapse the tools list, which hangs under its button in the conversation header |
 | `Alt`+`M` / `Alt`+`A` / `Alt`+`E` | Model / agent / effort |
 | `Alt`+`C` | Focus the composer |
 | `Alt`+`X` | Stop the current turn |
-| `Esc` | Close the open diff, or clear a sidebar filter (ending a Ctrl+P preview) |
+| `Esc` | Close the open diff or the tools panel, or clear a sidebar filter (ending a Ctrl+P preview) |
 
 The two filters narrow their list as you type (subsequences work: `kwchat` finds
 `kilo-web-chat`), `↑`/`↓` move the selection, `Enter` opens it and `Esc` clears
@@ -320,6 +323,9 @@ only the hunks.
 Returning to the conversation — from a diff, a file view, or anywhere else —
 lands on its end, since showing a diff unmounts the thread and it would otherwise
 come back at the first message.
+
+Selecting a project, or a conversation within one, puts the keyboard in the
+composer: choosing something is the start of typing in it.
 
 ## Syntax highlighting
 

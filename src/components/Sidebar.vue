@@ -1,31 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import { LogOut, MessageSquarePlus, Moon, Search, Sun } from "lucide-vue-next"
+import { MessageSquarePlus, Search } from "lucide-vue-next"
 import ProjectsPanel from "./ProjectsPanel.vue"
 import SidebarSearch from "./SidebarSearch.vue"
-import ToolsRow from "./ToolsRow.vue"
 import { useApp } from "@/stores/app"
-import { theme, toggleTheme } from "@/theme"
 import { shortcutsVisible } from "@/stores/shortcuts"
 import { openSearch, searchOpen } from "@/stores/search"
 
 const app = useApp()
-const { connected, connectError } = app.connection
-const { live, connecting } = app.live
-const { isBusy } = app.chat
-const { newChat, disconnect } = app
+const { newChat } = app
 
 /** How many projects the list holds; shown next to the header label. */
 const projectCount = computed(() => app.projects.entries.value.length)
 
-type ConnectionState = "offline" | "connecting" | "working" | "live" | "reconnecting"
-const connectionState = computed<ConnectionState>(() => {
-  if (!connected.value) return "offline"
-  if (connecting.value) return "connecting"
-  if (isBusy.value) return "working"
-  if (live.value) return "live"
-  return "reconnecting"
-})
 </script>
 
 <template>
@@ -47,26 +34,6 @@ const connectionState = computed<ConnectionState>(() => {
       </header>
 
       <ProjectsPanel />
-
-      <ToolsRow />
-
-      <footer class="foot">
-        <div class="foot-actions">
-          <button class="icon" :title="theme === 'dark' ? 'Light theme' : 'Dark theme'" @click="toggleTheme()">
-            <Sun v-if="theme === 'dark'" :size="16" />
-            <Moon v-else :size="16" />
-          </button>
-          <button class="icon" title="Disconnect" @click="disconnect()"><LogOut :size="16" /></button>
-        </div>
-        <!-- The origin and live status are only interesting when they change, so
-             nothing is shown while the connection is healthy. -->
-        <span
-          v-if="connectionState !== 'live'"
-          class="conn-warning"
-          :class="connectionState"
-          :title="connectError ?? connected?.origin ?? 'Not connected'"
-        ></span>
-      </footer>
     </template>
   </aside>
 </template>
@@ -116,39 +83,6 @@ const connectionState = computed<ConnectionState>(() => {
   font-size: 11px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
-}
-.foot {
-  border-top: 1px solid var(--border);
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.foot-actions {
-  display: flex;
-  gap: 6px;
-}
-/* Shown only while the connection is not healthy; hover reveals the origin. */
-.conn-warning {
-  margin-left: auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.conn-warning.working,
-.conn-warning.connecting,
-.conn-warning.reconnecting {
-  animation: kilo-pulse 1.2s ease-in-out infinite;
-}
-.conn-warning.offline {
-  background: var(--danger);
-  animation: none;
-}
-@keyframes kilo-pulse {
-  50% {
-    opacity: 0.35;
-  }
 }
 .icon {
   display: inline-flex;

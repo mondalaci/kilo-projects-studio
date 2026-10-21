@@ -8,11 +8,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "reka-ui"
-import { Folder, GitBranch, MessageSquare, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-vue-next"
+import { Folder, MessageSquare, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
 import Spinner from "./Spinner.vue"
 import type { SessionInfo } from "@/api/types"
 import { useApp } from "@/stores/app"
+import { requestComposerFocus } from "@/stores/draft"
 import { filterTarget, stopFilter } from "@/stores/filter"
 import type { ProjectEntry } from "@/stores/projects"
 import { useSessionState } from "@/stores/sessionState"
@@ -93,10 +94,6 @@ function conversationTime(entry: ProjectEntry) {
   return relativeTime(entry.session?.time?.updated ?? entry.session?.time?.created)
 }
 
-function isGitProject(entry: ProjectEntry) {
-  return entry.project.vcs === "git"
-}
-
 /** The state dot for a project's conversation. */
 function conversationState(entry: ProjectEntry) {
   return stateFor(entry.session?.id)
@@ -166,6 +163,9 @@ function projectChats(entry: ProjectEntry) {
 async function openChat(entry: ProjectEntry, chat: SessionInfo) {
   if (!isActive(entry)) await switchProject(entry.directory)
   await selectSession(chat.id)
+  // Choosing a conversation is the same intent as choosing its project: start
+  // typing there.
+  requestComposerFocus()
 }
 
 /* ------------------------------- list keyboard nav ------------------------------- */
@@ -307,7 +307,6 @@ function onKeydown(event: KeyboardEvent) {
           <span class="line">
             <Folder :size="13" class="folder" />
             <span class="name">{{ entry.name }}</span>
-            <GitBranch v-if="isGitProject(entry)" :size="12" class="git" />
             <Spinner v-if="isPending(entry)" :size="11" />
             <span v-else class="time">{{ conversationTime(entry) }}</span>
           </span>
@@ -531,10 +530,6 @@ function onKeydown(event: KeyboardEvent) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.git {
-  flex: none;
-  color: var(--text-faint);
 }
 .time {
   flex: none;

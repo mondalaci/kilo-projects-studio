@@ -7,8 +7,12 @@ import {
   DropdownMenuRoot,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  PopoverContent,
+  PopoverPortal,
+  PopoverRoot,
+  PopoverTrigger,
 } from "reka-ui"
-import { X, CircleAlert, Check, Copy, ExternalLink, Link2, Link2Off, Moon, Share2, Sun } from "lucide-vue-next"
+import { X, CircleAlert, Check, Copy, ExternalLink, Link2, Link2Off, LogOut, Moon, Share2, Sun, Wrench } from "lucide-vue-next"
 import type { AssistantMessage } from "@/api/types"
 import Sidebar from "./Sidebar.vue"
 import SourceControl from "./SourceControl.vue"
@@ -16,6 +20,7 @@ import DiffViewer from "./DiffViewer.vue"
 import MessageThread from "./MessageThread.vue"
 import Composer from "./Composer.vue"
 import PromptDock from "./PromptDock.vue"
+import ToolsRow from "./ToolsRow.vue"
 import FileViewer from "./FileViewer.vue"
 import ImageLightbox from "./ImageLightbox.vue"
 import { useApp } from "@/stores/app"
@@ -24,7 +29,7 @@ import { startFilter, stopFilter } from "@/stores/filter"
 import { useGit } from "@/stores/git"
 import { useTray } from "@/stores/tray"
 import { requestComposerFocus } from "@/stores/draft"
-import { requestOpen, shortcutKeys, shortcutsVisible, togglePronunciation } from "@/stores/shortcuts"
+import { openRequests, requestOpen, shortcutKeys, shortcutsVisible, togglePronunciation } from "@/stores/shortcuts"
 import { searchOpen, openSearch } from "@/stores/search"
 import { applyScmWidth, scmWidth, setScmWidth } from "@/stores/layout"
 import { theme, toggleTheme } from "@/theme"
@@ -57,6 +62,17 @@ watch(
   // After the DOM update: the thread is only back in the tree once the diff has
   // gone, and a request made before that would not reach it.
   { flush: "post" },
+)
+
+/** The tools list, shown under its button in the header. */
+const toolsOpen = ref(false)
+
+// Alt+T opens and closes the same panel the button does.
+watch(
+  () => openRequests.tools,
+  () => {
+    toolsOpen.value = !toolsOpen.value
+  },
 )
 
 const shareState = ref<"idle" | "shared" | "copied" | "unshared">("idle")
@@ -399,6 +415,19 @@ onBeforeUnmount(() => {
               {{ contextLimit ? `${contextPercent}%` : "—" }}
             </span>
           </div>
+          <PopoverRoot v-model:open="toolsOpen">
+            <PopoverTrigger as-child>
+              <button class="app-btn" title="Tools (Alt+T)" aria-label="Tools"><Wrench :size="16" /></button>
+            </PopoverTrigger>
+            <PopoverPortal>
+              <PopoverContent class="tools-panel" :side-offset="6" align="end">
+                <ToolsRow headless />
+              </PopoverContent>
+            </PopoverPortal>
+          </PopoverRoot>
+          <button class="app-btn" title="Disconnect" aria-label="Disconnect" @click="app.disconnect()">
+            <LogOut :size="16" />
+          </button>
           <button
             class="theme-btn"
             :title="theme === 'dark' ? 'Light theme' : 'Dark theme'"
@@ -594,6 +623,7 @@ onBeforeUnmount(() => {
 .stat-divider {
   opacity: 0.5;
 }
+.app-btn,
 .theme-btn,
 .share-btn {
   flex: none;
@@ -609,6 +639,7 @@ onBeforeUnmount(() => {
 .theme-btn {
   margin-left: 12px;
 }
+.app-btn:hover,
 .theme-btn:hover,
 .share-btn:hover {
   background: var(--bg-hover);

@@ -8,6 +8,12 @@ import { toolState, type ToolState } from "@/utils/tools"
 
 const TOOLS_DOCS_URL = "https://kilo.ai/docs/automate/tools"
 
+/**
+ * In its own panel the parent owns the expansion — the button that opened it is
+ * the toggle — so the list is simply always shown, without its own header.
+ */
+const props = defineProps<{ headless?: boolean }>()
+
 const { toolIds, selectedAgentInfo, selectedAgent } = useServer()
 const { overrides, setOverride, reset } = useTools()
 
@@ -26,13 +32,16 @@ watch(expanded, (value) => {
 // Overrides are per-agent; clear them when the mode changes.
 watch(selectedAgent, () => reset())
 
-// Alt+T toggles the tools list.
+// Alt+T toggles the tools list, except in a panel, where the parent's button does.
 watch(
   () => openRequests.tools,
   () => {
-    expanded.value = !expanded.value
+    if (!props.headless) expanded.value = !expanded.value
   },
 )
+
+/** Whether the chips are on screen: always, when the parent holds the expansion. */
+const open = computed(() => props.headless === true || expanded.value)
 
 const tools = computed(() => [...toolIds.value].sort((a, b) => a.localeCompare(b)))
 const enabledCount = computed(() => tools.value.filter((id) => displayState(id) !== "disabled").length)
@@ -50,14 +59,14 @@ function onToggle(id: string) {
 </script>
 
 <template>
-  <div v-if="tools.length" class="tools-row">
-    <button type="button" class="tools-head" @click="expanded = !expanded">
+  <div v-if="tools.length" class="tools-row" :class="{ embedded: headless }">
+    <button v-if="!headless" type="button" class="tools-head" @click="expanded = !expanded">
       <ChevronRight :size="13" class="tools-chev" :class="{ open: expanded }" />
       <span class="tools-label">Tools</span>
       <span class="tools-count">{{ enabledCount }}/{{ tools.length }}</span>
       <kbd v-if="shortcutsVisible" class="kbd floating">T</kbd>
     </button>
-    <div class="tools-collapse" :class="{ open: expanded }">
+    <div class="tools-collapse" :class="{ open }">
       <div class="tools-collapse-inner">
         <div class="tools-chips">
           <button
@@ -91,6 +100,11 @@ function onToggle(id: string) {
   flex: none;
   border-top: 1px solid var(--border);
   padding: 8px 10px;
+}
+/* In a panel there is nothing above it to separate it from. */
+.tools-row.embedded {
+  border-top: none;
+  padding: 0;
 }
 .tools-head {
   position: relative;

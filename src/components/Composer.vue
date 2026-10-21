@@ -32,6 +32,14 @@ function resize() {
 
 watch(draft, () => nextTick(resize))
 watch(composerFocusRequest, () => nextTick(() => textarea.value?.focus()))
+
+/**
+ * Take the keyboard when the composer appears. A request can arrive before the
+ * composer exists — picking a project while a diff is open has to close the diff
+ * first, which mounts it — and a watcher cannot see a value that changed before
+ * it was set up.
+ */
+onMounted(() => nextTick(() => textarea.value?.focus()))
 onMounted(() => {
   resize()
   // Focus the input by default when the chat UI opens.

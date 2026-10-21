@@ -200,9 +200,13 @@ export function useApp() {
     const session = projects.latestFor(directory)
     if (session) {
       await selectSession(session.id)
-      return
+    } else {
+      // A project with no conversation yet gets its first one.
+      await newChat()
     }
-    await newChat()
+    // Picking a project is the start of typing in it, so the composer takes the
+    // keyboard rather than leaving it wherever it was.
+    requestComposerFocus()
   }
 
   async function newChat() {
