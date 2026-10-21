@@ -44,8 +44,86 @@ const CAPTURE_DELAY_MS = Number(process.env.KPS_CAPTURE_DELAY ?? 4000)
 
 const BACKGROUND = "#1e1e1e"
 
+/** Default geometry, used the first time (and if a saved state is unusable). */
+const DEFAULT_WIDTH = 1480
+const DEFAULT_HEIGHT = 940
+
 /** The tray, once the app is ready. */
 let tray = null
+
+/**
+ * Saved window geometry lives beside the other per-user data so the window
+ * reopens where the user left it. The renderer drives its own resize drags
+ * through `window:set-bounds`, which the main process sees as ordinary
+ * resize/move events, so a single listener here covers every path that can
+ * change the geometry.
+ */
+function windowStateFile() {
+  return path.join(app.getPath("userData"), "window-state.json")
+}
+
+function loadWindowState() {
+  try {
+    const state = JSON.parse(fs.readFileSync(windowStateFile(), "utf8"))
+    return state && typeof state === "object" ? state : null
+  } catch {
+    // Missing or unreadable state is the normal first-run case, not an error.
+    return null
+  }
+}
+
+function saveWindowState(state) {
+  try {
+    fs.mkdirSync(path.dirname(windowStateFile()), { recursive: true })
+    fs.writeFileSync(windowStateFile(), JSON.stringify(state))
+  } catch (error) {
+    console.warn("[main] could not save window state:", error?.message ?? error)
+  }
+}
+
+/**
+ * Keep only a geometry that is finite and still overlaps a connected display.
+ * A window restored onto a monitor that is no longer attached would otherwise
+ * open off-screen, out of reach.
+ */
+function usableBounds(state) {
+  if (!state) return null
+  const { x, y, width, height } = state
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) return null
+  if (width < 1 || height < 1) return null
+  const onScreen = screen.getAllDisplays().some((display) => {
+    const area = display.workArea
+    return (
+      x < area.x + area.width &&
+      x + width > area.x &&
+      y < area.y + area.height &&
+      y + height > area.y
+    )
+  })
+  return onScreen ? { x, y, width, height } : null
+}
+
+/** Persist geometry on every change, debounced so a drag writes once. */
+function trackWindowState(window) {
+  let timer = null
+  const persist = () => {
+    if (window.isDestroyed()) return
+    // `getNormalBounds` reports the restored geometry even while maximized, so
+    // the maximized flag and the size to fall back to are both preserved.
+    saveWindowState({ ...window.getNormalBounds(), maximized: window.isMaximized() })
+  }
+  const schedule = () => {
+    clearTimeout(timer)
+    timer = setTimeout(persist, 400)
+  }
+  for (const event of ["resize", "move", "maximize", "unmaximize"]) {
+    window.on(event, schedule)
+  }
+  window.on("close", () => {
+    clearTimeout(timer)
+    persist()
+  })
+}
 
 /**
  * Read the app icon, reporting a missing or unreadable asset instead of
@@ -192,9 +270,13 @@ async function capture(window) {
 }
 
 function createWindow(url) {
+  const saved = CAPTURE_PATH ? null : loadWindowState()
+  const bounds = usableBounds(saved)
   const window = new BrowserWindow({
-    width: 1480,
-    height: 940,
+    width: bounds?.width ?? DEFAULT_WIDTH,
+    height: bounds?.height ?? DEFAULT_HEIGHT,
+    // Only restore the position once it is known to sit on a live display.
+    ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 960,
     minHeight: 560,
     backgroundColor: BACKGROUND,
@@ -241,6 +323,11 @@ function createWindow(url) {
     window.webContents.once("did-finish-load", () => {
       setTimeout(() => void capture(window), CAPTURE_DELAY_MS)
     })
+  } else {
+    // Restore the maximized state only after `show`, so the window does not
+    // flash at its normal size first.
+    trackWindowState(window)
+    if (saved?.maximized) window.maximize()
   }
 
   void window.loadURL(url)
