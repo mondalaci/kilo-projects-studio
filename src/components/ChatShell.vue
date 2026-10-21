@@ -12,7 +12,7 @@ import {
   PopoverRoot,
   PopoverTrigger,
 } from "reka-ui"
-import { X, CircleAlert, Check, Copy, ExternalLink, Link2, Link2Off, LogOut, Moon, Share2, Sun, Wrench } from "lucide-vue-next"
+import { X, CircleAlert, Check, Copy, ExternalLink, Link2, Link2Off, Moon, Share2, Sun, Wrench } from "lucide-vue-next"
 import type { AssistantMessage } from "@/api/types"
 import Sidebar from "./Sidebar.vue"
 import SourceControl from "./SourceControl.vue"
@@ -425,9 +425,6 @@ onBeforeUnmount(() => {
               </PopoverContent>
             </PopoverPortal>
           </PopoverRoot>
-          <button class="app-btn" title="Disconnect" aria-label="Disconnect" @click="app.disconnect()">
-            <LogOut :size="16" />
-          </button>
           <button
             class="theme-btn"
             :title="theme === 'dark' ? 'Light theme' : 'Dark theme'"
@@ -635,9 +632,6 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-}
-.theme-btn {
-  margin-left: 12px;
 }
 .app-btn:hover,
 .theme-btn:hover,

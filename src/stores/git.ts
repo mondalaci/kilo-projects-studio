@@ -40,7 +40,6 @@ const repo = ref<GitRepoInfo>({ isRepo: false })
 const files = ref<GitFileEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-const lastUpdated = ref<number | null>(null)
 const selection = ref<GitRow | null>(null)
 const openDiff = ref<OpenDiff | null>(null)
 
@@ -126,7 +125,6 @@ export function useGit() {
       }
       files.value = Array.isArray(result.files) ? result.files : []
       error.value = result.error ?? null
-      lastUpdated.value = Date.now()
       reconcileSelection()
     } catch (err) {
       if (seq === statusSeq) error.value = err instanceof Error ? err.message : String(err)
@@ -282,7 +280,6 @@ export function useGit() {
     repo.value = { isRepo: false }
     files.value = []
     error.value = null
-    lastUpdated.value = null
     closeDiff()
   }
 
@@ -297,7 +294,6 @@ export function useGit() {
     total,
     loading,
     error,
-    lastUpdated,
     selection,
     openDiff,
     refresh,

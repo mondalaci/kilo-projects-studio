@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import { Minus, Plus } from "lucide-vue-next"
+import { LogOut, Minus, Plus } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
 import WindowControls from "./WindowControls.vue"
 import { filterTarget, stopFilter } from "@/stores/filter"
+import { useApp } from "@/stores/app"
 import { useGit, type GitRow } from "@/stores/git"
 import { useServer } from "@/stores/server"
-import { relativeTime } from "@/utils/format"
 import { fuzzyMatch } from "@/utils/fuzzy"
 import { splitPath } from "@/utils/diff"
 
+const app = useApp()
 const git = useGit()
-const { repo, stagedRows, changeRows, total, loading, error, lastUpdated, selection, available } = git
+const { repo, stagedRows, changeRows, total, loading, error, selection, available } = git
 const { pathInfo } = useServer()
 
 /** Incremental filter over the changed files (Ctrl+P). */
@@ -158,6 +159,7 @@ function parts(path: string) {
         :title="`${total} uncommitted ${total === 1 ? 'change' : 'changes'}`"
       >{{ total }}</span>
       <span v-if="repo.isRepo && repo.branch" class="branch" :title="rootLabel ?? ''">{{ repo.branch }}</span>
+      <span class="head-spacer"></span>
       <!-- The panel cannot be hidden, so its header is always the rightmost
            strip of the window: that is where the window buttons live. -->
       <WindowControls />
@@ -238,7 +240,9 @@ function parts(path: string) {
         {{ total }} {{ total === 1 ? "change" : "changes" }}
         <span v-if="repo.head" class="head">· {{ repo.head }}</span>
       </span>
-      <span v-if="lastUpdated" class="updated">updated {{ relativeTime(lastUpdated) }}</span>
+      <button class="editor-icon" title="Disconnect" aria-label="Disconnect" @click="app.disconnect()">
+        <LogOut :size="14" />
+      </button>
     </footer>
   </aside>
 </template>
@@ -264,7 +268,9 @@ function parts(path: string) {
   border-bottom: 1px solid var(--border);
 }
 .scm-title {
-  flex: 1;
+  /* The pills belong against the title, so it takes its own width and the space
+     before the window controls is left to the spacer. */
+  flex: none;
   min-width: 0;
   font-size: 11px;
   text-transform: uppercase;
@@ -284,6 +290,10 @@ function parts(path: string) {
   background: var(--bg-active);
   border-radius: 999px;
   padding: 1px 7px;
+}
+.head-spacer {
+  flex: 1;
+  min-width: 0;
 }
 .branch {
   flex: none;
@@ -477,7 +487,7 @@ function parts(path: string) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 4px 6px 4px 12px;
   border-top: 1px solid var(--border);
   font-size: 11px;
   color: var(--text-faint);
