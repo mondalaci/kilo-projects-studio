@@ -251,6 +251,10 @@ app.setName("Kilo Projects Studio")
 
 // Single instance: a second launch focuses the existing window.
 if (!app.requestSingleInstanceLock() && !CAPTURE_PATH) {
+  // The running instance brings its window forward through its `second-instance`
+  // handler. Say so out loud: quitting here silently makes a launch look like it
+  // did nothing at all.
+  console.log("[main] another instance is already running; asking it to come forward and exiting")
   app.quit()
 } else {
   registerIpc()

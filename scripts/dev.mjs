@@ -6,7 +6,9 @@
  * `npm run app:dev` behaves like a single long-running command.
  */
 import { spawn } from "node:child_process"
+import fs from "node:fs"
 import net from "node:net"
+import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -40,6 +42,33 @@ function waitForPort(host, port, timeoutMs = 60_000) {
   })
 }
 
+/**
+ * Chromium keeps its single-instance lock as symlinks in the app's profile,
+ * naming the pid that holds it. A run that is killed abruptly leaves them behind
+ * and the next launch then exits immediately without a word. Clear it when the
+ * pid it names is gone.
+ */
+function clearStaleLock() {
+  if (process.platform !== "linux") return
+  const profile = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "Kilo Projects Studio")
+  try {
+    const owner = Number(fs.readlinkSync(path.join(profile, "SingletonLock")).split("-").pop())
+    if (!owner) return
+    try {
+      process.kill(owner, 0)
+      return // still running: its window will be raised by the lock itself
+    } catch {
+      // gone, so the lock is stale
+    }
+    for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
+      fs.rmSync(path.join(profile, name), { force: true })
+    }
+    console.log(`[dev] cleared a stale single-instance lock left by pid ${owner}`)
+  } catch {
+    // No lock at all, which is the normal case.
+  }
+}
+
 const children = new Set()
 
 function shutdown(code = 0) {
@@ -59,11 +88,17 @@ const vite = spawn(bin("vite"), ["--host", HOST, "--port", String(PORT), "--stri
 })
 children.add(vite)
 vite.on("exit", (code) => {
+  // The dev port is fixed on purpose (the renderer's origin decides where its
+  // settings live), so a second dev server cannot start. Say which port, since
+  // the failure otherwise looks like nothing happened.
   console.error(`[dev] vite exited (${code ?? 0})`)
+  if (code) console.error(`[dev] port ${PORT} is probably already taken by another dev server; KPS_DEV_PORT overrides it`)
   shutdown(code ?? 0)
 })
 
 await waitForPort(HOST, PORT)
+
+clearStaleLock()
 
 const electronArgs = [root]
 if (process.env.KPS_NO_SANDBOX === "1") electronArgs.push("--no-sandbox")
@@ -80,7 +115,14 @@ const electron = spawn(bin("electron"), electronArgs, {
   env: electronEnv,
 })
 children.add(electron)
+const launchedAt = Date.now()
 electron.on("exit", (code) => {
   console.log(`[dev] electron exited (${code ?? 0})`)
+  // A clean exit within a second or two means the single-instance lock: the app
+  // found another copy already running and handed over to it.
+  if (code === 0 && Date.now() - launchedAt < 3000) {
+    console.log("[dev] it exited immediately, which usually means another instance of the app is already running.")
+    console.log("[dev] list them with: pgrep -af 'kilo-projects-studio/node_modules'")
+  }
   shutdown(code ?? 0)
 })
