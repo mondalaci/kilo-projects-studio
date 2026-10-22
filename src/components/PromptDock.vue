@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive } from "vue"
-import { HelpCircle, ShieldAlert } from "lucide-vue-next"
+import { Check, HelpCircle, ShieldAlert } from "lucide-vue-next"
 import type { FormDetail, FormField } from "@/api/types"
 import { useApp } from "@/stores/app"
 
@@ -21,16 +21,22 @@ function setField(formID: string, field: FormField, value: unknown) {
   answers[`${formID}:${field.key}`] = value
 }
 
-function toggleMulti(formID: string, field: FormField, value: string) {
-  const key = `${formID}:${field.key}`
-  const current = Array.isArray(answers[key]) ? (answers[key] as string[]) : []
-  const pos = current.indexOf(value)
-  answers[key] = pos === -1 ? [...current, value] : current.filter((item) => item !== value)
+/** An option click: a toggle when several may be picked, a choice when one may. */
+function choose(formID: string, field: FormField, value: string) {
+  if (field.type === "multiselect") {
+    const key = `${formID}:${field.key}`
+    const current = Array.isArray(answers[key]) ? (answers[key] as string[]) : []
+    const pos = current.indexOf(value)
+    answers[key] = pos === -1 ? [...current, value] : current.filter((item) => item !== value)
+    return
+  }
+  setField(formID, field, field.type === "boolean" ? value === "true" : value)
 }
 
-function multiplePicked(formID: string, field: FormField, value: string): boolean {
-  const current = answers[`${formID}:${field.key}`]
-  return Array.isArray(current) && (current as string[]).includes(value)
+function isPicked(formID: string, field: FormField, value: string): boolean {
+  const current = fieldValue(formID, field)
+  if (field.type === "multiselect") return Array.isArray(current) && (current as string[]).includes(value)
+  return current !== undefined && current !== null && String(current) === value
 }
 
 function visibleFields(form: FormDetail): FormField[] {
@@ -82,28 +88,31 @@ function submit(form: FormDetail) {
         <p class="question-text">{{ field.title || field.key }}</p>
         <p v-if="field.description" class="question-desc">{{ field.description }}</p>
 
-        <select
-          v-if="field.options?.length && field.type !== 'multiselect'"
-          class="input"
-          :value="fieldValue(form.id, field)"
-          @change="setField(form.id, field, ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="" disabled>Choose…</option>
-          <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-
-        <div v-else-if="field.type === 'multiselect'" class="options">
-          <button
-            v-for="option in field.options"
-            :key="option.value"
-            class="option"
-            :class="{ picked: multiplePicked(form.id, field, option.value) }"
-            @click="toggleMulti(form.id, field, option.value)"
-          >
-            <span class="option-label">{{ option.label }}</span>
-            <span v-if="option.description" class="option-desc">{{ option.description }}</span>
-          </button>
-        </div>
+        <template v-if="field.options?.length">
+          <div class="options">
+            <button
+              v-for="option in field.options"
+              :key="option.value"
+              class="option"
+              :class="{ picked: isPicked(form.id, field, option.value) }"
+              @click="choose(form.id, field, option.value)"
+            >
+              <span class="option-mark"><Check v-if="isPicked(form.id, field, option.value)" :size="14" /></span>
+              <span class="option-body">
+                <span class="option-label">{{ option.label }}</span>
+                <span v-if="option.description" class="option-desc">{{ option.description }}</span>
+              </span>
+            </button>
+          </div>
+          <input
+            v-if="field.custom && field.type !== 'multiselect'"
+            class="input"
+            :value="fieldValue(form.id, field)"
+            placeholder="Or type your own answer…"
+            @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
+            @keydown.enter.prevent="submit(form)"
+          />
+        </template>
 
         <label v-else-if="field.type === 'boolean'" class="checkbox">
           <input
@@ -144,8 +153,16 @@ function submit(form: FormDetail) {
   flex-direction: column;
   gap: 10px;
   max-width: var(--content-width);
-  margin: 0 auto 10px;
+  /* Left inset matches the message avatar, like the composer, so a question
+     reads as part of the conversation rather than as a second input area. */
+  padding-left: 40px;
+  margin: 6px auto 0;
   width: 100%;
+}
+@media (max-width: 900px) {
+  .dock {
+    padding-left: 0;
+  }
 }
 .card {
   border: 1px solid var(--border);
@@ -236,8 +253,9 @@ function submit(form: FormDetail) {
 }
 .option {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
   text-align: left;
   border: 1px solid var(--border);
   background: var(--bg);
@@ -251,6 +269,22 @@ function submit(form: FormDetail) {
 .option.picked {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.option-mark {
+  display: flex;
+  width: 14px;
+  flex: none;
+  justify-content: center;
+  margin-top: 2px;
+  color: var(--accent);
+}
+.option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.options + .input {
+  margin-top: 8px;
 }
 .option-label {
   font-weight: 500;

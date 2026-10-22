@@ -1,13 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
 import type { AssistantReasoningBlock } from "@/api/types"
-import Spinner from "./Spinner.vue"
 
 const props = defineProps<{ block: AssistantReasoningBlock }>()
 const streaming = computed(() => !props.block.time?.completed)
 
 const body = ref<HTMLElement | null>(null)
 
+/**
+ * Keep the newest reasoning in view while it streams. The block is a fixed-height
+ * window onto a growing text, so without this the reader watches a frozen
+ * paragraph while the rest arrives below the fold.
+ *
+ * There is deliberately no spinner here: the text itself is the progress
+ * indicator, and the copy that used to sit in the right gutter was positioned
+ * outside the content column, where it collided with the scrollbar and was
+ * clipped by the window edge.
+ */
 watch(
   () => props.block.text,
   async () => {
@@ -21,32 +30,15 @@ watch(
 
 <template>
   <div class="reasoning">
-    <div v-if="streaming" class="head" aria-hidden="true">
-      <Spinner :size="14" />
-    </div>
     <div ref="body" class="body">{{ block.text }}</div>
   </div>
 </template>
 
 <style scoped>
 .reasoning {
-  position: relative;
   margin: 6px 0;
   border-left: 2px solid var(--border);
   padding-left: 10px;
-}
-/* Streaming indicator in the right gutter, mirroring the assistant avatar on the left. */
-.head {
-  position: absolute;
-  top: 0;
-  left: calc(100% + 10px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  color: var(--text-faint);
-  opacity: 0.6;
 }
 .body {
   margin-top: 6px;
@@ -56,12 +48,5 @@ watch(
   overflow-wrap: anywhere;
   max-height: 100px;
   overflow-y: auto;
-}
-/* No right gutter on narrow viewports: fall back to overlaying the content. */
-@media (max-width: 880px) {
-  .head {
-    left: auto;
-    right: 0;
-  }
 }
 </style>

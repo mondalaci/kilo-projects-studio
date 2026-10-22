@@ -27,7 +27,7 @@ const git = useGit()
 const fileViewer = useFileViewer()
 const tray = useTray()
 const { current, currentID } = app.sessions
-const { error, messages, isBusy } = app.chat
+const { error, messages, isBusy, awaitingUser } = app.chat
 const { models, selectedModelInfo } = app.server
 const { newChat } = app
 
@@ -264,7 +264,7 @@ function onKeyDown(event: KeyboardEvent) {
       break
     case shortcutKeys.stop:
       event.preventDefault()
-      if (isBusy.value) void app.abort()
+      if (isBusy.value || awaitingUser.value) void app.abort()
       break
     case shortcutKeys.newChat:
       event.preventDefault()
@@ -362,7 +362,11 @@ onBeforeUnmount(() => {
           </button>
         </header>
 
-        <MessageThread />
+        <MessageThread>
+          <!-- Questions and permission cards belong to the conversation, so they
+               follow the last message instead of sitting beside the composer. -->
+          <PromptDock />
+        </MessageThread>
 
         <div class="bottom">
           <div v-if="error" class="error-banner">
@@ -370,7 +374,6 @@ onBeforeUnmount(() => {
             <span>{{ error }}</span>
             <button @click="dismissError"><X :size="14" /></button>
           </div>
-          <PromptDock />
           <Composer />
         </div>
       </template>

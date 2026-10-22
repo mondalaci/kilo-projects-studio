@@ -51,17 +51,47 @@ const connected = ref<InstanceInfo | null>(null)
 const client = shallowRef<ServerClient | null>(null)
 const connecting = ref(false)
 const connectError = ref<string | null>(null)
+/** Set when a connection could not be written to `localStorage`. */
+const storageError = ref<string | null>(null)
+
+/**
+ * Credentials that are known to work, keyed by canonical origin.
+ *
+ * These are kept in memory as well as in storage on purpose. `localStorage` can
+ * be unavailable — a wiped profile, private mode — and its write failure used to
+ * be silent, so a reload lost the password. Every later scan then probed the
+ * server unauthenticated, got a 401, and the picker kept asking for the password
+ * it had already been given.
+ */
+const memoryCredentials = new Map<string, Credentials>()
 
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved.value))
-  } catch {
-    /* storage unavailable */
+    storageError.value = null
+    return true
+  } catch (error) {
+    storageError.value = `Could not save the connection: ${
+      error instanceof Error ? error.message : String(error)
+    }`
+    return false
   }
+}
+
+function rememberCredentials(origin: string, credentials: Credentials | undefined) {
+  if (!credentials?.password) return
+  const canonical = normalizeOrigin(origin) ?? origin
+  memoryCredentials.set(canonical, {
+    username: credentials.username || "opencode",
+    password: credentials.password,
+  })
 }
 
 function credentialsFor(origin: string): Credentials | undefined {
   const canonical = normalizeOrigin(origin) ?? origin
+  // In-memory first: it survives a storage failure within this run.
+  const remembered = memoryCredentials.get(canonical)
+  if (remembered) return remembered
   const entry = saved.value.find((item) => item.origin === canonical)
   if (!entry?.password) return undefined
   return { username: entry.username || "opencode", password: entry.password }
@@ -77,6 +107,8 @@ export function useConnection() {
         origin: item.origin,
         product: item.product,
         version: item.version,
+        // A server that needs no password is saved with an empty one, so the
+        // probe result — not the stored record — decides this.
         requiresAuth: false,
         directory: undefined,
       })
@@ -120,14 +152,17 @@ export function useConnection() {
 
       client.value = next
       connected.value = probe
+      rememberCredentials(probe.origin, creds)
 
       const existing = saved.value.find((item) => item.origin === probe.origin)
       const record: SavedConnection = {
         origin: probe.origin,
         product: probe.product,
         version: probe.version,
-        username: creds?.username ?? existing?.username ?? "opencode",
-        password: creds?.password ?? existing?.password ?? "",
+        username: creds?.username || existing?.username || "opencode",
+        // `||`, not `??`: an empty string would otherwise replace a password
+        // that is already stored and lock the server out of future scans.
+        password: creds?.password || existing?.password || "",
         lastUsed: Date.now(),
       }
       saved.value = [record, ...saved.value.filter((item) => item.origin !== probe.origin)]
@@ -156,6 +191,7 @@ export function useConnection() {
     const canonical = normalizeOrigin(origin) ?? origin
     saved.value = saved.value.filter((item) => item.origin !== canonical)
     discovered.value = discovered.value.filter((item) => item.origin !== canonical)
+    memoryCredentials.delete(canonical)
     persist()
   }
 
@@ -184,6 +220,7 @@ export function useConnection() {
     client,
     connecting,
     connectError,
+    storageError,
     scan,
     connect,
     disconnect,

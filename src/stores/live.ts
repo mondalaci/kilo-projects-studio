@@ -25,6 +25,18 @@ const PING_MS = 2000
 const LEADER_TIMEOUT_MS = PING_MS * 3
 const ELECT_GRACE_MS = 400
 
+/**
+ * How long the event stream may stay silent while a turn is in flight before it
+ * is treated as broken, and how often that is checked.
+ *
+ * The server sends events only when something changes, so a stream that died
+ * without closing its socket looks exactly like a quiet one: `onOpen` resyncs
+ * when a connection is established, but nothing notices that an established
+ * connection stopped delivering.
+ */
+const STREAM_QUIET_MS = 15_000
+const LIVENESS_MS = 5_000
+
 const supported = typeof BroadcastChannel !== "undefined"
 const tabID = Math.random().toString(36).slice(2)
 const seen = new Set<string>()
@@ -39,6 +51,7 @@ type Msg =
 let channel: BroadcastChannel | null = null
 let listenerAttached = false
 let unloadHooked = false
+let focusHooked = false
 let activeClient: ServerClient | null = null
 let activeKey = ""
 let role: "idle" | "leader" | "follower" = "idle"
@@ -48,6 +61,9 @@ let watchdog: ReturnType<typeof setInterval> | null = null
 let electTimer: ReturnType<typeof setTimeout> | null = null
 let lastPingAt = 0
 let reconcileTimer: ReturnType<typeof setTimeout> | null = null
+let livenessTimer: ReturnType<typeof setInterval> | null = null
+/** Consecutive liveness checks that found a turn running and the stream silent. */
+let quietTicks = 0
 
 function sleep(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -90,10 +106,13 @@ function apply(event: ServerEvent) {
 
   // A turn ending is the point the server has persisted the final messages, so
   // re-read them: streaming is best-effort and the persisted copy is canonical.
+  // An interrupted turn ends with `session.execution.interrupted`, not idle, so
+  // it needs listing here or the last message keeps its streaming caret.
   if (
     activeClient &&
     (event.type === "session.execution.succeeded" ||
       event.type === "session.execution.failed" ||
+      event.type === "session.execution.interrupted" ||
       event.type === "session.idle")
   ) {
     scheduleReconcile()
@@ -107,6 +126,32 @@ function scheduleReconcile() {
     reconcileTimer = null
     if (activeClient) void chat.reconcile(activeClient)
   }, 400)
+}
+
+/**
+ * Repair state that a silent stream can no longer report.
+ *
+ * While a turn is believed to be running, prolonged silence from the stream is a
+ * fault rather than a lull. Re-read first — the session record is authoritative
+ * and ends the turn if it finished while nobody was listening — and if the
+ * stream is still silent on the next pass, replace it, because every later turn
+ * would be missed the same way.
+ */
+function checkLiveness() {
+  if (!activeClient || !chat.isBusy.value) {
+    quietTicks = 0
+    return
+  }
+  if (Date.now() - (lastEventAt.value ?? 0) < STREAM_QUIET_MS) {
+    quietTicks = 0
+    return
+  }
+  quietTicks += 1
+  void chat.reconcile(activeClient)
+  if (quietTicks >= 2) {
+    quietTicks = 0
+    if (role === "leader") openStream()
+  }
 }
 
 async function resync(client: ServerClient) {
@@ -253,6 +298,11 @@ function stop() {
     clearInterval(watchdog)
     watchdog = null
   }
+  if (livenessTimer) {
+    clearInterval(livenessTimer)
+    livenessTimer = null
+  }
+  quietTicks = 0
   closeStream()
   role = "idle"
   lastPingAt = 0
@@ -283,10 +333,19 @@ export function useLive() {
       })
       unloadHooked = true
     }
+    if (!focusHooked && typeof window !== "undefined") {
+      // Events are not replayed, so a window that was hidden or unfocused may
+      // have missed a whole turn — re-read once when it comes back.
+      window.addEventListener("focus", () => {
+        if (activeClient) void chat.reconcile(activeClient)
+      })
+      focusHooked = true
+    }
 
     watchdog = setInterval(() => {
       if (role === "follower" && lastPingAt > 0 && Date.now() - lastPingAt > LEADER_TIMEOUT_MS) elect()
     }, PING_MS)
+    livenessTimer = setInterval(checkLiveness, LIVENESS_MS)
 
     elect()
   }

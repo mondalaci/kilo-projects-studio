@@ -247,6 +247,27 @@ export class ServerClient {
     return res?.data ?? []
   }
 
+  /**
+   * The newest page of the conversation, oldest first.
+   *
+   * The endpoint pages from the *oldest* message unless told otherwise, so a
+   * conversation longer than one page needs `desc` to see how it ends — and to
+   * know which message is the newest. The page is reversed here so callers keep
+   * reading it in conversation order. Walking further back is the cursor's job;
+   * the server rejects a cursor combined with `order`.
+   */
+  async recentMessages(
+    sessionID: string,
+    opts: RequestOptions & { limit?: number } = {},
+  ): Promise<SessionMessage[]> {
+    const { limit, ...rest } = opts
+    const res = await this.request<ListEnvelope<SessionMessage>>(`/api/session/${sessionID}/message`, {
+      ...rest,
+      query: { order: "desc", limit, ...rest.query },
+    })
+    return (res?.data ?? []).slice().reverse()
+  }
+
   /** The conversation as the model sees it (system + user + assistant turns). */
   async context(sessionID: string, opts: RequestOptions = {}): Promise<SessionMessage[]> {
     const res = await this.request<DataEnvelope<SessionMessage[]>>(`/api/session/${sessionID}/context`, opts)
@@ -320,6 +341,14 @@ export class ServerClient {
       ...opts,
       method: "POST",
       body: { answer },
+    })
+  }
+
+  /** Withdraw a question so its tool call returns instead of waiting forever. */
+  cancelForm(sessionID: string, formID: string, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/form/${formID}`, {
+      ...opts,
+      method: "DELETE",
     })
   }
 

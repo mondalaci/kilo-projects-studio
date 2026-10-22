@@ -10,7 +10,7 @@ import { addFile, attachments, clearAttachments, composerFocusRequest, draft, re
 import { useServer } from "@/stores/server"
 
 const app = useApp()
-const { sending, isBusy } = app.chat
+const { sending, isBusy, awaitingUser } = app.chat
 const { abort, sendMessage } = app
 const { selectedModelInfo, selectedModelVariants } = useServer()
 
@@ -176,7 +176,9 @@ function onKeydown(event: KeyboardEvent) {
           </span>
         </div>
         <div class="bar-right">
-          <button v-if="isBusy" class="send stop" title="Stop (Alt+X)" @click="stop">
+          <!-- A question parks the turn without streaming, so "stop" must show
+               there too: it withdraws the question and frees the run. -->
+          <button v-if="isBusy || awaitingUser" class="send stop" title="Stop (Alt+X)" @click="stop">
             <ShortcutBadge modifier="alt" key-label="X" />
             <Square :size="14" fill="currentColor" />
           </button>

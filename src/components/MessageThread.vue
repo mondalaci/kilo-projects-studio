@@ -4,7 +4,7 @@ import MessageItem from "./MessageItem.vue"
 import Spinner from "./Spinner.vue"
 import { useChat } from "@/stores/chat"
 
-const { messages, loading, currentSessionID, scrollToBottomRequest } = useChat()
+const { messages, loading, currentSessionID, scrollToBottomRequest, pendingForms, pendingPermissions } = useChat()
 
 const viewport = ref<HTMLElement | null>(null)
 const pinned = ref(true)
@@ -86,6 +86,19 @@ watch(currentSessionID, () => {
 }, { flush: "post" })
 
 /**
+ * A question or a permission card is appended to the conversation, which grows
+ * the thread without touching `messages`. Follow it the way a new message is
+ * followed, so an ask that arrives while the view is pinned does not end up
+ * below the fold. `scrollToBottom` is a no-op while the reader has scrolled up.
+ */
+watch(
+  [() => pendingForms.value.length, () => pendingPermissions.value.length],
+  ([forms, permissions], [wasForms, wasPermissions]) => {
+    if (forms > wasForms || permissions > wasPermissions) void scrollToBottom()
+  },
+)
+
+/**
  * Opening the thread — first load, a session switch, or coming back from the
  * diff view, which unmounts it — must show where the conversation got to rather
  * than start at the first message. The frame after covers content that takes a
@@ -117,6 +130,10 @@ onMounted(() => {
         :streaming="message.id === lastAssistantID && message.type === 'assistant' && !message.time?.completed"
       />
     </template>
+
+    <!-- Turn-level widgets the app weaves into the conversation: questions and
+         permission cards sit after the last message, above the composer. -->
+    <slot />
 
     <div class="spacer"></div>
   </div>

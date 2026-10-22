@@ -112,7 +112,8 @@ export function useSessionState() {
       }
       case "session.idle":
       case "session.execution.succeeded":
-      case "session.execution.failed": {
+      case "session.execution.failed":
+      case "session.execution.interrupted": {
         if (!sessionID) break
         patch(sessionID, { status: "idle" })
         markUnreadIfUnwatched(sessionID)
@@ -138,16 +139,18 @@ export function useSessionState() {
         if (target) setBlocked(target, undefined)
         break
       }
+      // As in the chat store, `form.created` nests the form under `data.form`.
       case "form.created": {
-        const form = data as unknown as FormInfo
+        const form = (data.form ?? data) as unknown as FormInfo
         if (form?.id && form.sessionID) {
           requestSession.set(form.id, form.sessionID)
           setBlocked(form.sessionID, "question")
         }
         break
       }
-      case "form.replied": {
-        const requestID = (data.formID as string | undefined) ?? (data.id as string | undefined)
+      case "form.replied":
+      case "form.cancelled": {
+        const requestID = (data.id as string | undefined) ?? (data.formID as string | undefined)
         const target = (requestID && requestSession.get(requestID)) || sessionID
         if (requestID) requestSession.delete(requestID)
         if (target) setBlocked(target, undefined)
