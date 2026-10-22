@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onMounted, ref, watch } from "vue"
 import { ArrowUp, FileText, Paperclip, Square, TriangleAlert, X } from "lucide-vue-next"
 import ShortcutBadge from "./ShortcutBadge.vue"
 import AgentSelector from "./AgentSelector.vue"
@@ -8,15 +8,18 @@ import VariantSelector from "./VariantSelector.vue"
 import { useApp } from "@/stores/app"
 import { addFile, attachments, clearAttachments, composerFocusRequest, draft, removeAttachment } from "@/stores/draft"
 import { useServer } from "@/stores/server"
+import { acceptsText, answerFromText, visibleFields } from "@/utils/form"
 
 const app = useApp()
-const { sending, isBusy, awaitingUser } = app.chat
-const { abort, sendMessage } = app
+const { sending, isBusy, awaitingUser, pendingForms } = app.chat
+const { abort, sendMessage, replyForm } = app
 const { selectedModelInfo, selectedModelVariants } = useServer()
 
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
+/** A typed answer to a pending question is in flight. */
+const answering = ref(false)
 
 const isImage = (mime: string) => mime.startsWith("image/")
 
@@ -31,6 +34,17 @@ function resize() {
   el.style.height = "auto"
   el.style.height = `${Math.min(el.scrollHeight, 320)}px`
 }
+
+/**
+ * The pending question this composer can answer, if any.
+ *
+ * A question card carries only what is *chosen*; a free-form answer is typed
+ * here, so a question waiting on one turns the composer into its input.
+ */
+const answerableForm = computed(() =>
+  pendingForms.value.find((form) => visibleFields(form).some(acceptsText)),
+)
+const placeholder = computed(() => (answerableForm.value ? "Type your answer…" : ""))
 
 watch(draft, () => nextTick(resize))
 watch(composerFocusRequest, () => nextTick(() => textarea.value?.focus()))
@@ -87,7 +101,27 @@ function onDrop(event: DragEvent) {
 async function submit() {
   const text = draft.value
   const hasFiles = attachments.value.length > 0
-  if ((!text.trim() && !hasFiles) || sending.value) return
+  if ((!text.trim() && !hasFiles) || sending.value || answering.value) return
+
+  // A pending question claims the line: replying to it is what frees the parked
+  // run, and the card clears itself once the server has the answer. Attachments
+  // mean the message rather than an answer, so they go the normal way.
+  const form = hasFiles ? undefined : answerableForm.value
+  const answer = form ? answerFromText(form, text) : null
+  if (form && answer) {
+    draft.value = ""
+    await nextTick(resize)
+    answering.value = true
+    try {
+      await replyForm(form.sessionID, form.id, answer)
+    } catch {
+      draft.value = text
+      await nextTick(resize)
+    } finally {
+      answering.value = false
+    }
+    return
+  }
 
   const files = attachments.value.map((item) => ({
     type: "file" as const,
@@ -150,6 +184,7 @@ function onKeydown(event: KeyboardEvent) {
           class="input"
           rows="1"
           spellcheck="false"
+          :placeholder="placeholder"
           @keydown="onKeydown"
           @paste="onPaste"
         />

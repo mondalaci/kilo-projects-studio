@@ -3,6 +3,7 @@ import { reactive } from "vue"
 import { Check, HelpCircle, ShieldAlert } from "lucide-vue-next"
 import type { FormDetail, FormField } from "@/api/types"
 import { useApp } from "@/stores/app"
+import { fieldDefault, hasCardControls, normalizeValue, visibleFields } from "@/utils/form"
 
 const app = useApp()
 const { pendingPermissions, pendingForms } = app.chat
@@ -14,7 +15,7 @@ const answers = reactive<Record<string, unknown>>({})
 function fieldValue(formID: string, field: FormField): unknown {
   const key = `${formID}:${field.key}`
   if (key in answers) return answers[key]
-  return field.default ?? (field.type === "multiselect" ? [] : field.type === "boolean" ? false : "")
+  return fieldDefault(field)
 }
 
 function setField(formID: string, field: FormField, value: unknown) {
@@ -39,23 +40,10 @@ function isPicked(formID: string, field: FormField, value: string): boolean {
   return current !== undefined && current !== null && String(current) === value
 }
 
-function visibleFields(form: FormDetail): FormField[] {
-  return form.fields.filter((field) => !field.hidden)
-}
-
 function submit(form: FormDetail) {
   const answer: Record<string, unknown> = {}
   for (const field of visibleFields(form)) {
-    const value = fieldValue(form.id, field)
-    if (field.type === "multiselect") {
-      answer[field.key] = Array.isArray(value) ? value : []
-    } else if (field.type === "boolean") {
-      answer[field.key] = value === true
-    } else if (field.type === "number" || field.type === "integer") {
-      answer[field.key] = typeof value === "string" ? Number(value) : value
-    } else {
-      answer[field.key] = value
-    }
+    answer[field.key] = normalizeValue(field, fieldValue(form.id, field))
   }
   void replyForm(form.sessionID, form.id, answer)
 }
@@ -88,31 +76,23 @@ function submit(form: FormDetail) {
         <p class="question-text">{{ field.title || field.key }}</p>
         <p v-if="field.description" class="question-desc">{{ field.description }}</p>
 
-        <template v-if="field.options?.length">
-          <div class="options">
-            <button
-              v-for="option in field.options"
-              :key="option.value"
-              class="option"
-              :class="{ picked: isPicked(form.id, field, option.value) }"
-              @click="choose(form.id, field, option.value)"
-            >
-              <span class="option-mark"><Check v-if="isPicked(form.id, field, option.value)" :size="14" /></span>
-              <span class="option-body">
-                <span class="option-label">{{ option.label }}</span>
-                <span v-if="option.description" class="option-desc">{{ option.description }}</span>
-              </span>
-            </button>
-          </div>
-          <input
-            v-if="field.custom && field.type !== 'multiselect'"
-            class="input"
-            :value="fieldValue(form.id, field)"
-            placeholder="Or type your own answer…"
-            @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
-            @keydown.enter.prevent="submit(form)"
-          />
-        </template>
+        <!-- The card carries what is *chosen*; anything free-form is answered by
+             typing in the composer, so no question grows a second input area. -->
+        <div v-if="field.options?.length" class="options">
+          <button
+            v-for="option in field.options"
+            :key="option.value"
+            class="option"
+            :class="{ picked: isPicked(form.id, field, option.value) }"
+            @click="choose(form.id, field, option.value)"
+          >
+            <span class="option-mark"><Check v-if="isPicked(form.id, field, option.value)" :size="14" /></span>
+            <span class="option-body">
+              <span class="option-label">{{ option.label }}</span>
+              <span v-if="option.description" class="option-desc">{{ option.description }}</span>
+            </span>
+          </button>
+        </div>
 
         <label v-else-if="field.type === 'boolean'" class="checkbox">
           <input
@@ -122,25 +102,8 @@ function submit(form: FormDetail) {
           />
           <span>{{ field.title || field.key }}</span>
         </label>
-
-        <input
-          v-else-if="field.type === 'number' || field.type === 'integer'"
-          class="input"
-          type="number"
-          :value="fieldValue(form.id, field)"
-          @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
-        />
-
-        <input
-          v-else
-          class="input"
-          :value="fieldValue(form.id, field)"
-          placeholder="Type your answer…"
-          @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
-          @keydown.enter.prevent="submit(form)"
-        />
       </div>
-      <div class="actions">
+      <div v-if="hasCardControls(form)" class="actions">
         <button class="primary" @click="submit(form)">Submit</button>
       </div>
     </div>
@@ -283,9 +246,6 @@ function submit(form: FormDetail) {
   flex-direction: column;
   gap: 1px;
 }
-.options + .input {
-  margin-top: 8px;
-}
 .option-label {
   font-weight: 500;
 }
@@ -298,17 +258,5 @@ function submit(form: FormDetail) {
   align-items: center;
   gap: 8px;
   font-size: 13.5px;
-}
-.input {
-  width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  outline: none;
-  color: var(--text);
-}
-.input:focus {
-  border-color: var(--accent);
 }
 </style>
