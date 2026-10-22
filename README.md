@@ -1,8 +1,11 @@
-# Kilo Projects Studio
+# OpenCode Projects Studio
 
-A desktop studio for **Kilo Code** / **opencode** projects, built as an **Electron**
-app on top of the [kilo-web-chat](../kilo-web-chat) UI (Vue 3, Vite, TypeScript,
-Reka UI).
+A desktop studio for **opencode** projects, built as an **Electron** app on top of
+the [kilo-web-chat](../kilo-web-chat) UI (Vue 3, Vite, TypeScript, Reka UI).
+
+> Not built by the OpenCode team and not affiliated with them in any way. The
+> name follows OpenCode's own convention for projects that build on it
+> (`opencode-*`); the app is an independent client for the opencode server.
 
 It keeps the whole chat experience — streaming Markdown, reasoning blocks, tool
 calls, permissions and questions — and reorganises it around projects instead of
@@ -65,7 +68,7 @@ npm run app
 
 `npm run app:build` does both in one step.
 
-A Kilo/opencode server must be running for the app to connect:
+An opencode server must be running for the app to connect:
 
 ```bash
 opencode serve --service --port 4097
@@ -85,11 +88,11 @@ Other scripts: `npm run dev` (Vite only, for UI work in a browser),
 ## Configuration
 
 An optional runtime config is fetched from the app root as
-`/kilo-projects-studio.json`. The real file is gitignored; copy the committed
+`/opencode-projects-studio.json`. The real file is gitignored; copy the committed
 template to create one:
 
 ```bash
-cp public/kilo-projects-studio.example.json public/kilo-projects-studio.json
+cp public/opencode-projects-studio.example.json public/opencode-projects-studio.json
 ```
 
 ```json
@@ -106,12 +109,19 @@ Conversation search (`Alt`+`F`) uses the optional `kilo-search` service in
 `127.0.0.1:27184`) when it is running, and falls back to server-side title search
 when it is not.
 
+> `kilo-search` still reads the **Kilo** database
+> (`~/.local/share/kilo/kilo.db`) rather than opencode's
+> (`~/.local/share/opencode/opencode.db`), and its queries are written against
+> Kilo's tables. Against an opencode server it therefore answers from the wrong
+> store — worse than being absent, because the fallback never runs. Repointing and
+> adapting it, or retiring it, is outstanding.
+
 ## How it is put together
 
 ```
 electron/
   main.cjs           Main process: window, IPC registration, capture helper
-  preload.cjs        contextBridge surface exposed as window.kiloDesktop
+  preload.cjs        contextBridge surface exposed as window.opencodeDesktop
   git.cjs            Git plumbing: repo detection, status, diff, stage/unstage
   static-server.cjs  Loopback static server for the production build
 build/
@@ -169,7 +179,7 @@ derived siblings are picked up automatically if packaging is added later.
 ### Why the renderer is served over HTTP
 
 Production loads the UI from `http://127.0.0.1:<port>` (a throwaway static
-server started by the main process) rather than `file://`. The Kilo/opencode
+server started by the main process) rather than `file://`. The opencode
 server only accepts requests from loopback HTTP origins, so a `file://` page
 would be blocked by CORS, and `localStorage` is unreliable there too.
 
@@ -248,7 +258,7 @@ grey the sidebar uses disappears against a dark panel at tray size.
 | Menu | The rollup, one entry per actionable project (and per conversation), then Open / Mute notifications / Quit |
 
 On Linux the tray is an AppIndicator, which only really supports a menu: a left
-click opens the menu rather than toggling the window, so "Open Kilo Projects
+click opens the menu rather than toggling the window, so "Open OpenCode Projects
 Studio" is in the menu as well. Where the tray cannot be created at all, the app
 logs a warning and carries on without it.
 

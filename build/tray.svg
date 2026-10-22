@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <title>Kilo Projects Studio tray icon</title>
+  <title>OpenCode Projects Studio tray icon</title>
   <!--
     The tray icon before the renderer sends its first badge: the same monochrome
     "K" the app draws, with the idle dot. Kept in step with src/utils/trayIcon.ts

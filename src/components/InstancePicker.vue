@@ -69,7 +69,7 @@ async function manualConnect() {
       <header class="head drag-region">
         <div class="logo" aria-hidden="true">K</div>
         <div>
-          <h1>Kilo Projects Studio</h1>
+          <h1>OpenCode Projects Studio</h1>
           <p>Connect to a Kilo Code or opencode server</p>
         </div>
         <!-- The window has no OS decoration, so the picker carries the window
@@ -374,9 +374,9 @@ button.wide {
   margin: 12px 0 0;
 }
 .spin {
-  animation: kilo-spin 0.8s linear infinite;
+  animation: opencode-spin 0.8s linear infinite;
 }
-@keyframes kilo-spin {
+@keyframes opencode-spin {
   to {
     transform: rotate(360deg);
   }

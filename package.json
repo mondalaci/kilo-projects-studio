@@ -1,9 +1,9 @@
 {
-  "name": "kilo-projects-studio",
+  "name": "opencode-projects-studio",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Electron desktop studio for Kilo Code / opencode projects: one conversation per project plus a source-control panel with diffs",
+  "description": "Electron desktop studio for opencode projects: one conversation per project plus a source-control panel with diffs",
   "author": "mondalaci",
   "license": "MIT",
   "main": "electron/main.cjs",

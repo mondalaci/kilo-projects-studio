@@ -149,7 +149,7 @@ const GLYPH: Record<ConversationState, string> = {
 
 /** One line per project for the tray tooltip, `⚠ bipane — blocked`. */
 export function trayTooltip(rollup: TrayRollup, limit = 8): string {
-  const title = `Kilo Projects Studio — ${rollup.counts.blocked} blocked, ${rollup.counts.working} working, ${rollup.counts.done} done`
+  const title = `OpenCode Projects Studio — ${rollup.counts.blocked} blocked, ${rollup.counts.working} working, ${rollup.counts.done} done`
   const lines = rollup.projects
     .filter((project) => project.state !== "idle")
     .slice(0, limit)

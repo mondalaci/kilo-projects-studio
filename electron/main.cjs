@@ -280,7 +280,7 @@ function createWindow(url) {
     minWidth: 960,
     minHeight: 560,
     backgroundColor: BACKGROUND,
-    title: "Kilo Projects Studio",
+    title: "OpenCode Projects Studio",
     show: !CAPTURE_PATH,
     // Chromeless: no OS title bar, so the app's own header is the top of the
     // window. The renderer draws the window controls and marks the header
@@ -334,7 +334,7 @@ function createWindow(url) {
   return window
 }
 
-app.setName("Kilo Projects Studio")
+app.setName("OpenCode Projects Studio")
 
 // Single instance: a second launch focuses the existing window.
 if (!app.requestSingleInstanceLock() && !CAPTURE_PATH) {

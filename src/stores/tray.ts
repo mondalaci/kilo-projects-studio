@@ -14,7 +14,7 @@ import { badgeText, shouldAnnounce, trayTooltip, type ConversationState } from "
  * bringing the window forward.
  */
 
-const MUTE_KEY = "kilo-projects-studio.mute"
+const MUTE_KEY = "opencode-projects-studio.mute"
 
 const bridge = desktopBridge()
 
@@ -57,7 +57,7 @@ export function useTray() {
     const rollup = state.trayRollup.value
     const items: TrayMenuItem[] = [
       {
-        label: `Kilo — ${rollup.counts.blocked} blocked, ${rollup.counts.working} working, ${rollup.counts.done} done`,
+        label: `OpenCode — ${rollup.counts.blocked} blocked, ${rollup.counts.working} working, ${rollup.counts.done} done`,
         enabled: false,
       },
       { type: "separator" },
@@ -89,7 +89,7 @@ export function useTray() {
 
     items.push(
       { type: "separator" },
-      { label: "Open Kilo Projects Studio", action: "open" },
+      { label: "Open OpenCode Projects Studio", action: "open" },
       { label: muted.value ? "Unmute notifications" : "Mute notifications", action: "mute" },
       { type: "separator" },
       { label: "Quit", action: "quit" },

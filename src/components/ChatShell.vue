@@ -68,7 +68,7 @@ async function copySessionID() {
   }
 }
 
-const SIDEBAR_KEY = "kilo-projects-studio.sidebar-width"
+const SIDEBAR_KEY = "opencode-projects-studio.sidebar-width"
 const SIDEBAR_MIN = 200
 const SIDEBAR_MAX = 520
 const DEFAULT_SIDEBAR = 264
@@ -128,7 +128,7 @@ const title = computed(() => current.value?.title || "New chat")
 watch(
   title,
   (value) => {
-    document.title = current.value ? `${value} · Kilo Projects Studio` : "Kilo Projects Studio"
+    document.title = current.value ? `${value} · OpenCode Projects Studio` : "OpenCode Projects Studio"
   },
   { immediate: true },
 )

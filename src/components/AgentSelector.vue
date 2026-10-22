@@ -89,13 +89,13 @@ watch(
     :ignore-filter="true"
     :open-on-click="true"
     :open-on-focus="true"
-    class="kilo-agent-root"
+    class="opencode-agent-root"
   >
-    <ComboboxAnchor class="kilo-agent-anchor" title="Mode (Alt+A)">
-      <Bot :size="14" class="kilo-agent-icon" />
+    <ComboboxAnchor class="opencode-agent-anchor" title="Mode (Alt+A)">
+      <Bot :size="14" class="opencode-agent-icon" />
       <ComboboxInput
         ref="inputRef"
-        class="kilo-agent-input"
+        class="opencode-agent-input"
         :display-value="displayValue"
         placeholder="Select mode…"
         spellcheck="false"
@@ -103,16 +103,16 @@ watch(
         @focus="selectDisplayValue"
         @click="selectDisplayValue"
       />
-      <ComboboxTrigger class="kilo-agent-chevron" aria-label="Select mode (Alt+A)">
+      <ComboboxTrigger class="opencode-agent-chevron" aria-label="Select mode (Alt+A)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
       <ShortcutBadge modifier="alt" key-label="A" />
     </ComboboxAnchor>
 
     <ComboboxPortal>
-      <ComboboxContent class="kilo-menu kilo-agent-menu" position="popper" side="top" :side-offset="8" align="start">
-        <ComboboxViewport class="kilo-agent-scroll">
-          <ComboboxEmpty class="kilo-agent-empty">
+      <ComboboxContent class="opencode-menu opencode-agent-menu" position="popper" side="top" :side-offset="8" align="start">
+        <ComboboxViewport class="opencode-agent-scroll">
+          <ComboboxEmpty class="opencode-agent-empty">
             {{ query ? `No modes match “${query}”.` : "No modes." }}
           </ComboboxEmpty>
           <ComboboxItem
@@ -120,12 +120,12 @@ watch(
             :key="agent.id"
             :value="agent.id"
             :text-value="agent.name"
-            class="kilo-agent-option"
+            class="opencode-agent-option"
             :class="{ 'is-active': agent.id === selectedAgent }"
           >
-            <span class="kilo-agent-name">{{ agent.name }}</span>
-            <span v-if="agent.description" class="kilo-agent-desc">{{ agent.description }}</span>
-            <ComboboxItemIndicator class="kilo-agent-check"><Check :size="15" /></ComboboxItemIndicator>
+            <span class="opencode-agent-name">{{ agent.name }}</span>
+            <span v-if="agent.description" class="opencode-agent-desc">{{ agent.description }}</span>
+            <ComboboxItemIndicator class="opencode-agent-check"><Check :size="15" /></ComboboxItemIndicator>
           </ComboboxItem>
         </ComboboxViewport>
       </ComboboxContent>
@@ -135,7 +135,7 @@ watch(
 
 <!-- Unscoped: Reka's teleported content does not receive scoped-style attributes. -->
 <style>
-.kilo-agent-anchor {
+.opencode-agent-anchor {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -148,17 +148,17 @@ watch(
   color: var(--text);
   transition: border-color 0.12s, background 0.12s;
 }
-.kilo-agent-anchor:hover {
+.opencode-agent-anchor:hover {
   background: var(--bg-hover);
 }
-.kilo-agent-anchor:focus-within {
+.opencode-agent-anchor:focus-within {
   border-color: var(--accent);
 }
-.kilo-agent-icon {
+.opencode-agent-icon {
   color: var(--accent);
   flex: none;
 }
-.kilo-agent-input {
+.opencode-agent-input {
   width: 90px;
   border: none;
   outline: none;
@@ -167,10 +167,10 @@ watch(
   font-size: 13px;
   text-overflow: ellipsis;
 }
-.kilo-agent-input::placeholder {
+.opencode-agent-input::placeholder {
   color: var(--text-muted);
 }
-.kilo-agent-chevron {
+.opencode-agent-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -180,10 +180,10 @@ watch(
   padding: 2px;
   flex: none;
 }
-.kilo-agent-chevron:hover {
+.opencode-agent-chevron:hover {
   color: var(--text);
 }
-.kilo-agent-menu {
+.opencode-agent-menu {
   width: 560px;
   max-width: calc(100vw - 32px);
   display: flex;
@@ -191,12 +191,12 @@ watch(
   padding: 0;
   overflow: hidden;
 }
-.kilo-agent-scroll {
+.opencode-agent-scroll {
   max-height: min(72vh, 600px);
   overflow: auto;
   padding: 6px;
 }
-.kilo-agent-option {
+.opencode-agent-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 18px;
   align-items: center;
@@ -207,13 +207,13 @@ watch(
   outline: none;
   user-select: none;
 }
-.kilo-agent-option[data-highlighted] {
+.opencode-agent-option[data-highlighted] {
   background: var(--bg-hover);
 }
-.kilo-agent-option.is-active {
+.opencode-agent-option.is-active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.kilo-agent-name {
+.opencode-agent-name {
   grid-column: 1;
   font-size: 13.5px;
   font-weight: 500;
@@ -223,7 +223,7 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.kilo-agent-desc {
+.opencode-agent-desc {
   grid-column: 1;
   font-size: 11px;
   line-height: 1.4;
@@ -231,14 +231,14 @@ watch(
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.kilo-agent-check {
+.opencode-agent-check {
   grid-column: 2;
   grid-row: 1 / span 2;
   justify-self: center;
   color: var(--accent);
   display: inline-flex;
 }
-.kilo-agent-empty {
+.opencode-agent-empty {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;

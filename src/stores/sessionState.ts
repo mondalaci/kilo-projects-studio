@@ -23,7 +23,7 @@ import {
  * the global permission/form lists to repair anything missed while offline.
  */
 
-const UNREAD_KEY = "kilo-projects-studio.unread-sessions"
+const UNREAD_KEY = "opencode-projects-studio.unread-sessions"
 
 /** How often the baseline sweep re-reads the global pending lists. */
 const SWEEP_MS = 2000

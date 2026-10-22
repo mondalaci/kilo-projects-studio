@@ -176,9 +176,9 @@ function isCompose(block: AssistantToolBlock): boolean {
   height: 15px;
   background: var(--text);
   vertical-align: text-bottom;
-  animation: kilo-blink 1s step-start infinite;
+  animation: opencode-blink 1s step-start infinite;
 }
-@keyframes kilo-blink {
+@keyframes opencode-blink {
   50% {
     opacity: 0;
   }

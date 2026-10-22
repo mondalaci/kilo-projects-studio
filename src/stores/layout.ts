@@ -7,7 +7,7 @@ import { ref } from "vue"
  * width is a preference worth remembering.
  */
 
-const WIDTH_KEY = "kilo-projects-studio.scm-width"
+const WIDTH_KEY = "opencode-projects-studio.scm-width"
 
 export const SCM_MIN_WIDTH = 240
 export const SCM_MAX_WIDTH = 720

@@ -1,6 +1,6 @@
 /**
- * Optional runtime configuration, loaded from `kilo-projects-studio.json` served at
- * the site root (i.e. `public/kilo-projects-studio.json`, copied into the build).
+ * Optional runtime configuration, loaded from `opencode-projects-studio.json` served at
+ * the site root (i.e. `public/opencode-projects-studio.json`, copied into the build).
  *
  * It is a plain static file, so it can be edited on a running deployment and
  * picked up on the next reload — no rebuild or restart needed. A missing or
@@ -14,7 +14,7 @@ export interface RuntimeConfig {
   defaultAgent?: string | null
 }
 
-const CONFIG_URL = `${import.meta.env.BASE_URL}kilo-projects-studio.json`
+const CONFIG_URL = `${import.meta.env.BASE_URL}opencode-projects-studio.json`
 
 let pending: Promise<RuntimeConfig> | null = null
 

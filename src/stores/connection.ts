@@ -2,7 +2,7 @@ import { computed, ref, shallowRef } from "vue"
 import { ServerClient, type Credentials } from "@/api/client"
 import { discoverInstances, normalizeOrigin, probeInstance, type InstanceInfo } from "@/api/discovery"
 
-const STORAGE_KEY = "kilo-projects-studio.connections"
+const STORAGE_KEY = "opencode-projects-studio.connections"
 
 export interface SavedConnection {
   origin: string

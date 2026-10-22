@@ -2,7 +2,7 @@
  * Minimal static file server for the built renderer.
  *
  * Production loads the UI over `http://127.0.0.1:<random port>` rather than
- * `file://`, because the Kilo/opencode server only accepts requests from
+ * `file://`, because the opencode server only accepts requests from
  * loopback HTTP origins (`http://localhost:*`, `http://127.0.0.1:*`). A `file://`
  * page sends no usable Origin, so CORS would block every API call, and
  * localStorage is unreliable there too.

@@ -12,10 +12,10 @@ defineProps<{ size?: number }>()
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
-  animation: kilo-spin 0.7s linear infinite;
+  animation: opencode-spin 0.7s linear infinite;
   opacity: 0.8;
 }
-@keyframes kilo-spin {
+@keyframes opencode-spin {
   to {
     transform: rotate(360deg);
   }

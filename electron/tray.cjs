@@ -9,7 +9,7 @@
  * Platform note: on Linux the tray is an AppIndicator, which only really
  * supports a menu — a left click opens it rather than toggling the window, and
  * `click` events may never fire. The menu therefore repeats the window actions
- * ("Open Kilo Projects Studio") so nothing is unreachable there.
+ * ("Open OpenCode Projects Studio") so nothing is unreachable there.
  */
 const { Notification, Menu, Tray, app, nativeImage } = require("electron")
 
@@ -73,7 +73,7 @@ function createTrayManager({ iconPath, getWindow }) {
     if (image.isEmpty()) console.warn(`[tray] could not read ${iconPath}`)
     else console.log(`[tray] base icon ${size.width}x${size.height} from ${iconPath}`)
     tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
-    tray.setToolTip("Kilo Projects Studio")
+    tray.setToolTip("OpenCode Projects Studio")
     // Where the platform delivers them, these make the tray a fast switcher.
     tray.on("click", () => toggleWindow(getWindow()))
     // The window already shows the last conversation that was active, so raising
@@ -118,7 +118,7 @@ function createTrayManager({ iconPath, getWindow }) {
     notify(payload) {
       if (muted || !Notification.isSupported()) return
       const notification = new Notification({
-        title: payload?.title ?? "Kilo Projects Studio",
+        title: payload?.title ?? "OpenCode Projects Studio",
         body: payload?.body ?? "",
         silent: false,
       })

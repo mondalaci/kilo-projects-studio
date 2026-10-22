@@ -50,7 +50,7 @@ function waitForPort(host, port, timeoutMs = 60_000) {
  */
 function clearStaleLock() {
   if (process.platform !== "linux") return
-  const profile = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "Kilo Projects Studio")
+  const profile = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "OpenCode Projects Studio")
   try {
     const owner = Number(fs.readlinkSync(path.join(profile, "SingletonLock")).split("-").pop())
     if (!owner) return
@@ -122,7 +122,7 @@ electron.on("exit", (code) => {
   // found another copy already running and handed over to it.
   if (code === 0 && Date.now() - launchedAt < 3000) {
     console.log("[dev] it exited immediately, which usually means another instance of the app is already running.")
-    console.log("[dev] list them with: pgrep -af 'kilo-projects-studio/node_modules'")
+    console.log("[dev] list them with: pgrep -af 'opencode-projects-studio/node_modules'")
   }
   shutdown(code ?? 0)
 })

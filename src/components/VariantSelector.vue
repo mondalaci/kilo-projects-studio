@@ -87,13 +87,13 @@ watch(
     :ignore-filter="true"
     :open-on-click="true"
     :open-on-focus="true"
-    class="kilo-variant-root"
+    class="opencode-variant-root"
   >
-    <ComboboxAnchor class="kilo-variant-anchor" title="Reasoning effort / variant (Alt+E)">
-      <Gauge :size="14" class="kilo-variant-icon" />
+    <ComboboxAnchor class="opencode-variant-anchor" title="Reasoning effort / variant (Alt+E)">
+      <Gauge :size="14" class="opencode-variant-icon" />
       <ComboboxInput
         ref="inputRef"
-        class="kilo-variant-input"
+        class="opencode-variant-input"
         :display-value="displayValue"
         placeholder="Default"
         spellcheck="false"
@@ -101,26 +101,26 @@ watch(
         @focus="selectDisplayValue"
         @click="selectDisplayValue"
       />
-      <ComboboxTrigger class="kilo-variant-chevron" aria-label="Select variant (Alt+E)">
+      <ComboboxTrigger class="opencode-variant-chevron" aria-label="Select variant (Alt+E)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
       <ShortcutBadge modifier="alt" key-label="E" />
     </ComboboxAnchor>
 
     <ComboboxPortal>
-      <ComboboxContent class="kilo-menu kilo-variant-menu" position="popper" side="top" :side-offset="8" align="start">
-        <ComboboxViewport class="kilo-variant-scroll">
-          <ComboboxEmpty class="kilo-variant-empty">No variants.</ComboboxEmpty>
+      <ComboboxContent class="opencode-menu opencode-variant-menu" position="popper" side="top" :side-offset="8" align="start">
+        <ComboboxViewport class="opencode-variant-scroll">
+          <ComboboxEmpty class="opencode-variant-empty">No variants.</ComboboxEmpty>
           <ComboboxItem
             v-for="name in filtered"
             :key="name"
             :value="name"
             :text-value="label(name)"
-            class="kilo-variant-option"
+            class="opencode-variant-option"
             :class="{ 'is-active': name === selectedVariant }"
           >
-            <span class="kilo-variant-name">{{ label(name) }}</span>
-            <ComboboxItemIndicator class="kilo-variant-check"><Check :size="15" /></ComboboxItemIndicator>
+            <span class="opencode-variant-name">{{ label(name) }}</span>
+            <ComboboxItemIndicator class="opencode-variant-check"><Check :size="15" /></ComboboxItemIndicator>
           </ComboboxItem>
         </ComboboxViewport>
       </ComboboxContent>
@@ -130,7 +130,7 @@ watch(
 
 <!-- Unscoped: Reka's teleported content does not receive scoped-style attributes. -->
 <style>
-.kilo-variant-anchor {
+.opencode-variant-anchor {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -143,17 +143,17 @@ watch(
   color: var(--text);
   transition: border-color 0.12s, background 0.12s;
 }
-.kilo-variant-anchor:hover {
+.opencode-variant-anchor:hover {
   background: var(--bg-hover);
 }
-.kilo-variant-anchor:focus-within {
+.opencode-variant-anchor:focus-within {
   border-color: var(--accent);
 }
-.kilo-variant-icon {
+.opencode-variant-icon {
   color: var(--accent);
   flex: none;
 }
-.kilo-variant-input {
+.opencode-variant-input {
   width: auto;
   min-width: 56px;
   max-width: 140px;
@@ -165,10 +165,10 @@ watch(
   font-size: 13px;
   text-overflow: ellipsis;
 }
-.kilo-variant-input::placeholder {
+.opencode-variant-input::placeholder {
   color: var(--text-muted);
 }
-.kilo-variant-chevron {
+.opencode-variant-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -178,22 +178,22 @@ watch(
   padding: 2px;
   flex: none;
 }
-.kilo-variant-chevron:hover {
+.opencode-variant-chevron:hover {
   color: var(--text);
 }
-.kilo-variant-menu {
+.opencode-variant-menu {
   width: 200px;
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
 }
-.kilo-variant-scroll {
+.opencode-variant-scroll {
   max-height: min(50vh, 320px);
   overflow: auto;
   padding: 6px;
 }
-.kilo-variant-option {
+.opencode-variant-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 18px;
   align-items: center;
@@ -204,25 +204,25 @@ watch(
   outline: none;
   user-select: none;
 }
-.kilo-variant-option[data-highlighted] {
+.opencode-variant-option[data-highlighted] {
   background: var(--bg-hover);
 }
-.kilo-variant-option.is-active {
+.opencode-variant-option.is-active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.kilo-variant-name {
+.opencode-variant-name {
   grid-column: 1;
   font-size: 13.5px;
   color: var(--text);
   text-transform: capitalize;
 }
-.kilo-variant-check {
+.opencode-variant-check {
   grid-column: 2;
   justify-self: center;
   color: var(--accent);
   display: inline-flex;
 }
-.kilo-variant-empty {
+.opencode-variant-empty {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;

@@ -12,7 +12,7 @@ export interface ContentHit {
   snippet?: string
 }
 
-const KEY = "kilo-projects-studio.search-url"
+const KEY = "opencode-projects-studio.search-url"
 const DEFAULT_URL = "http://127.0.0.1:27184"
 
 export function searchURL(): string {

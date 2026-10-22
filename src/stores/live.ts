@@ -20,7 +20,7 @@ const projects = useProjects()
  * other tabs, so a handful of open tabs does not exhaust the per-origin
  * connection pool with one stream each.
  */
-const CHANNEL_NAME = "kilo-projects-studio.events.v2"
+const CHANNEL_NAME = "opencode-projects-studio.events.v2"
 const PING_MS = 2000
 const LEADER_TIMEOUT_MS = PING_MS * 3
 const ELECT_GRACE_MS = 400

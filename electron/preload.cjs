@@ -1,7 +1,7 @@
 /**
  * Preload bridge.
  *
- * Exposes a deliberately small, promise-based surface on `window.kiloDesktop`.
+ * Exposes a deliberately small, promise-based surface on `window.opencodeDesktop`.
  * The renderer never sees `ipcRenderer`, `require`, or the filesystem: it can
  * only ask the main process for git data and let it open things externally.
  */
@@ -76,7 +76,7 @@ const trayApi = {
   },
 }
 
-contextBridge.exposeInMainWorld("kiloDesktop", {
+contextBridge.exposeInMainWorld("opencodeDesktop", {
   desktop: true,
   platform: process.platform,
   git,

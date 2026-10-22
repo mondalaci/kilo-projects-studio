@@ -12,7 +12,7 @@ import type {
   ServerConfig,
 } from "@/api/types"
 
-const PREFS_KEY = "kilo-projects-studio.prefs"
+const PREFS_KEY = "opencode-projects-studio.prefs"
 
 interface Preferences {
   [origin: string]: { agent?: string; model?: ModelRef; directory?: string }

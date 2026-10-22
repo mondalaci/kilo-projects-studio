@@ -141,7 +141,7 @@ function toggle(row: GitRow) {
 function reveal(row: GitRow) {
   const root = repo.value.root
   if (!root) return
-  void window.kiloDesktop?.shell.reveal(`${root}/${row.path}`)
+  void window.opencodeDesktop?.shell.reveal(`${root}/${row.path}`)
 }
 
 /** Split a path for display: the directory dims and gives way to the file name. */

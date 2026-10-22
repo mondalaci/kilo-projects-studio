@@ -212,13 +212,13 @@ function costColor(model: ModelInfo): string | undefined {
     :ignore-filter="true"
     :open-on-click="true"
     :open-on-focus="true"
-    class="kilo-model-root"
+    class="opencode-model-root"
   >
-    <ComboboxAnchor class="kilo-model-anchor">
-      <Brain :size="14" class="kilo-model-anchor-icon" />
+    <ComboboxAnchor class="opencode-model-anchor">
+      <Brain :size="14" class="opencode-model-anchor-icon" />
       <ComboboxInput
         ref="inputRef"
-        class="kilo-model-input"
+        class="opencode-model-input"
         :display-value="displayValue"
         placeholder="Search models…"
         spellcheck="false"
@@ -226,64 +226,64 @@ function costColor(model: ModelInfo): string | undefined {
         @focus="selectDisplayValue"
         @click="selectDisplayValue"
       />
-      <ComboboxTrigger class="kilo-model-chevron" aria-label="Toggle models (Alt+M)">
+      <ComboboxTrigger class="opencode-model-chevron" aria-label="Toggle models (Alt+M)">
         <ChevronDown :size="14" />
       </ComboboxTrigger>
       <ShortcutBadge modifier="alt" key-label="M" />
     </ComboboxAnchor>
 
     <ComboboxPortal>
-      <ComboboxContent class="kilo-menu kilo-model-menu" position="popper" side="top" :side-offset="8" align="start">
-        <div class="kilo-model-head">
+      <ComboboxContent class="opencode-menu opencode-model-menu" position="popper" side="top" :side-offset="8" align="start">
+        <div class="opencode-model-head">
           <Search :size="13" />
           <span>Type to search all providers</span>
-          <label class="kilo-model-show-all">
+          <label class="opencode-model-show-all">
             <input v-model="showAll" type="checkbox" />
             All
           </label>
         </div>
-        <ComboboxViewport class="kilo-model-viewport">
-          <ScrollAreaRoot class="kilo-model-scroll-root" type="auto">
-            <ScrollAreaViewport class="kilo-model-scroll">
-              <ComboboxGroup v-for="group in visibleGroups" :key="group.providerID" class="kilo-model-group">
-                <ComboboxLabel class="kilo-model-group-head">
+        <ComboboxViewport class="opencode-model-viewport">
+          <ScrollAreaRoot class="opencode-model-scroll-root" type="auto">
+            <ScrollAreaViewport class="opencode-model-scroll">
+              <ComboboxGroup v-for="group in visibleGroups" :key="group.providerID" class="opencode-model-group">
+                <ComboboxLabel class="opencode-model-group-head">
                   <span>{{ group.providerName }}</span>
-                  <span v-if="group.connected" class="kilo-model-dot" title="Connected"></span>
+                  <span v-if="group.connected" class="opencode-model-dot" title="Connected"></span>
                 </ComboboxLabel>
                 <ComboboxItem
                   v-for="model in group.models"
                   :key="modelKey(group.providerID, model.id)"
                   :value="modelKey(group.providerID, model.id)"
                   :text-value="model.name"
-                  class="kilo-model-option"
+                  class="opencode-model-option"
                   :class="{ 'is-active': isSelected(model) }"
                 >
-                  <span class="kilo-model-name">{{ model.name }}</span>
+                  <span class="opencode-model-name">{{ model.name }}</span>
                   <span
                     v-if="costLabel(model)"
-                    class="kilo-model-cost"
+                    class="opencode-model-cost"
                     :style="{ color: costColor(model) }"
                     :title="costTitle(model)"
                     >{{ costLabel(model) }}</span
                   >
-                  <span class="kilo-model-badges">
-                    <span v-if="(model.variants?.length ?? 0) > 0" class="kilo-model-tag is-reasoning">variants</span>
+                  <span class="opencode-model-badges">
+                    <span v-if="(model.variants?.length ?? 0) > 0" class="opencode-model-tag is-reasoning">variants</span>
                   </span>
-                  <ComboboxItemIndicator class="kilo-model-check"><Check :size="15" /></ComboboxItemIndicator>
+                  <ComboboxItemIndicator class="opencode-model-check"><Check :size="15" /></ComboboxItemIndicator>
                 </ComboboxItem>
               </ComboboxGroup>
-              <ComboboxEmpty class="kilo-model-empty">
+              <ComboboxEmpty class="opencode-model-empty">
                 {{ query ? `No models match “${query}”.` : "No models available." }}
               </ComboboxEmpty>
-              <p v-if="!query && !showAll && resultCount" class="kilo-model-hint">Showing connected providers only</p>
-              <p v-else-if="totalMatches > resultCount" class="kilo-model-hint">
+              <p v-if="!query && !showAll && resultCount" class="opencode-model-hint">Showing connected providers only</p>
+              <p v-else-if="totalMatches > resultCount" class="opencode-model-hint">
                 Showing {{ resultCount }} of {{ totalMatches }} matches · refine your search
               </p>
             </ScrollAreaViewport>
-            <ScrollAreaScrollbar class="kilo-model-scrollbar" orientation="vertical">
-              <ScrollAreaThumb class="kilo-model-thumb" />
+            <ScrollAreaScrollbar class="opencode-model-scrollbar" orientation="vertical">
+              <ScrollAreaThumb class="opencode-model-thumb" />
             </ScrollAreaScrollbar>
-            <ScrollAreaCorner class="kilo-model-scrollbar-corner" />
+            <ScrollAreaCorner class="opencode-model-scrollbar-corner" />
           </ScrollAreaRoot>
         </ComboboxViewport>
       </ComboboxContent>
@@ -293,7 +293,7 @@ function costColor(model: ModelInfo): string | undefined {
 
 <!-- Unscoped: Reka's teleported content does not receive scoped-style attributes. -->
 <style>
-.kilo-model-anchor {
+.opencode-model-anchor {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -306,17 +306,17 @@ function costColor(model: ModelInfo): string | undefined {
   color: var(--text);
   transition: border-color 0.12s, background 0.12s;
 }
-.kilo-model-anchor:hover {
+.opencode-model-anchor:hover {
   background: var(--bg-hover);
 }
-.kilo-model-anchor:focus-within {
+.opencode-model-anchor:focus-within {
   border-color: var(--accent);
 }
-.kilo-model-anchor-icon {
+.opencode-model-anchor-icon {
   color: var(--accent);
   flex: none;
 }
-.kilo-model-input {
+.opencode-model-input {
   width: auto;
   min-width: 96px;
   max-width: 360px;
@@ -328,10 +328,10 @@ function costColor(model: ModelInfo): string | undefined {
   font-size: 13px;
   text-overflow: ellipsis;
 }
-.kilo-model-input::placeholder {
+.opencode-model-input::placeholder {
   color: var(--text-muted);
 }
-.kilo-model-chevron {
+.opencode-model-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -341,17 +341,17 @@ function costColor(model: ModelInfo): string | undefined {
   padding: 2px;
   flex: none;
 }
-.kilo-model-chevron:hover {
+.opencode-model-chevron:hover {
   color: var(--text);
 }
-.kilo-model-menu {
+.opencode-model-menu {
   width: 460px;
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
 }
-.kilo-model-head {
+.opencode-model-head {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -361,10 +361,10 @@ function costColor(model: ModelInfo): string | undefined {
   font-size: 11.5px;
   flex: none;
 }
-.kilo-model-head > span {
+.opencode-model-head > span {
   flex: 1;
 }
-.kilo-model-show-all {
+.opencode-model-show-all {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -373,23 +373,23 @@ function costColor(model: ModelInfo): string | undefined {
   white-space: nowrap;
   cursor: pointer;
 }
-.kilo-model-viewport {
+.opencode-model-viewport {
   overflow: visible !important;
   flex: none !important;
   min-height: 0;
 }
-.kilo-model-scroll-root {
+.opencode-model-scroll-root {
   position: relative;
   max-height: min(62vh, 520px);
 }
-.kilo-model-scroll {
+.opencode-model-scroll {
   max-height: min(62vh, 520px);
   overflow-x: hidden !important;
   /* Keep keyboard-highlighted rows clear of the sticky group header. */
   scroll-padding-top: 34px;
   padding-right: 12px;
 }
-.kilo-model-scrollbar {
+.opencode-model-scrollbar {
   display: flex;
   width: 10px;
   padding: 2px;
@@ -397,22 +397,22 @@ function costColor(model: ModelInfo): string | undefined {
   touch-action: none;
   background: var(--bg-elevated);
 }
-.kilo-model-thumb {
+.opencode-model-thumb {
   flex: 1;
   position: relative;
   border-radius: 6px;
   background: var(--text-muted);
 }
-.kilo-model-thumb:hover {
+.opencode-model-thumb:hover {
   background: var(--text);
 }
-.kilo-model-scrollbar-corner {
+.opencode-model-scrollbar-corner {
   background: var(--bg-elevated);
 }
-.kilo-model-group {
+.opencode-model-group {
   padding-bottom: 4px;
 }
-.kilo-model-group-head {
+.opencode-model-group-head {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -426,13 +426,13 @@ function costColor(model: ModelInfo): string | undefined {
   background: var(--bg-elevated);
   z-index: 1;
 }
-.kilo-model-dot {
+.opencode-model-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: #4ade80;
 }
-.kilo-model-option {
+.opencode-model-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 78px 88px 18px;
   align-items: center;
@@ -446,19 +446,19 @@ function costColor(model: ModelInfo): string | undefined {
   outline: none;
   user-select: none;
 }
-.kilo-model-option[data-highlighted] {
+.opencode-model-option[data-highlighted] {
   background: var(--bg-hover);
 }
-.kilo-model-option.is-active {
+.opencode-model-option.is-active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.kilo-model-name {
+.opencode-model-name {
   grid-column: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.kilo-model-cost {
+.opencode-model-cost {
   grid-column: 2;
   justify-self: end;
   font-size: 10px;
@@ -466,20 +466,20 @@ function costColor(model: ModelInfo): string | undefined {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.kilo-model-badges {
+.opencode-model-badges {
   grid-column: 3;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
 }
-.kilo-model-check {
+.opencode-model-check {
   grid-column: 4;
   justify-self: center;
   color: var(--accent);
   display: inline-flex;
 }
-.kilo-model-tag {
+.opencode-model-tag {
   font-size: 10.5px;
   padding: 1px 6px;
   border-radius: 999px;
@@ -487,17 +487,17 @@ function costColor(model: ModelInfo): string | undefined {
   color: var(--text-muted);
   flex: none;
 }
-.kilo-model-tag.is-reasoning {
+.opencode-model-tag.is-reasoning {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
-.kilo-model-empty {
+.opencode-model-empty {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
   padding: 24px;
 }
-.kilo-model-hint {
+.opencode-model-hint {
   text-align: center;
   color: var(--text-faint);
   font-size: 11.5px;

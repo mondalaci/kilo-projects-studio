@@ -12,7 +12,7 @@ import { useServer } from "./server"
  *
  * Credentials, in priority order:
  *  1. a key the user pasted here (persisted in localStorage), else
- *  2. the connected Kilo server's `openrouter` key, which `/provider` already
+ *  2. the connected opencode server's `openrouter` key, which `/provider` already
  *     returns to this client (in memory only, never persisted here).
  *
  * The server only serves that key over its own (loopback, optionally
@@ -23,10 +23,10 @@ import { useServer } from "./server"
 const MODELS_URL = "https://openrouter.ai/api/v1/models?output_modalities=speech"
 const SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
 
-const MODEL_KEY = "kilo-projects-studio.tts.model"
-const VOICE_KEY = "kilo-projects-studio.tts.voice"
-const KEY_KEY = "kilo-projects-studio.tts.key"
-const SLOW_KEY = "kilo-projects-studio.tts.slow"
+const MODEL_KEY = "opencode-projects-studio.tts.model"
+const VOICE_KEY = "opencode-projects-studio.tts.voice"
+const KEY_KEY = "opencode-projects-studio.tts.key"
+const SLOW_KEY = "opencode-projects-studio.tts.slow"
 
 /** Preferred default when the catalog loads and nothing valid is remembered. */
 const DEFAULT_MODEL = "microsoft/mai-voice-2.1-flash"
@@ -168,7 +168,7 @@ export function useSpeech() {
   /** Synthesize `input` and return playable audio. Throws a readable error. */
   async function synthesize(input: string): Promise<Blob> {
     const key = effectiveKey.value
-    if (!key) throw new Error("No OpenRouter key: connect to a Kilo server with openrouter, or paste a key.")
+    if (!key) throw new Error("No OpenRouter key: connect to an opencode server with openrouter, or paste a key.")
     const model = selectedModelID.value
     if (!model) throw new Error("Choose a speech model first.")
     const voice = selectedVoice.value || undefined
@@ -239,7 +239,7 @@ function requestSpeech(
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
       "HTTP-Referer": window.location.origin,
-      "X-Title": "Kilo Projects Studio",
+      "X-Title": "OpenCode Projects Studio",
     },
     body: JSON.stringify(body),
   })

@@ -114,7 +114,7 @@ summary,
    pinned document-wide for the duration. */
 html.window-resizing,
 html.window-resizing * {
-  cursor: var(--kilo-resize-cursor, default) !important;
+  cursor: var(--opencode-resize-cursor, default) !important;
   user-select: none !important;
 }
 
@@ -382,12 +382,12 @@ a {
 }
 
 /* Shared overlay primitives (Reka UI is unstyled) */
-.kilo-overlay {
+.opencode-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 40;
-  animation: kilo-fade 0.12s ease;
+  animation: opencode-fade 0.12s ease;
 }
 /*
  * highlight.js on the editor surfaces (diff and file views). Unlike the message
@@ -478,7 +478,7 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   box-shadow: var(--shadow);
 }
 
-.kilo-menu {
+.opencode-menu {
   min-width: 180px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -486,9 +486,9 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   box-shadow: var(--shadow);
   padding: 5px;
   z-index: 60;
-  animation: kilo-pop 0.12s ease;
+  animation: opencode-pop 0.12s ease;
 }
-.kilo-menu-item {
+.opencode-menu-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -500,13 +500,13 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   cursor: pointer;
   user-select: none;
 }
-.kilo-menu-item[data-highlighted] {
+.opencode-menu-item[data-highlighted] {
   background: var(--bg-hover);
 }
-.kilo-menu-item.danger {
+.opencode-menu-item.danger {
   color: var(--danger);
 }
-.kilo-menu-sep {
+.opencode-menu-sep {
   height: 1px;
   background: var(--border);
   margin: 4px;
@@ -547,7 +547,7 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   pointer-events: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
-.kilo-dialog {
+.opencode-dialog {
   position: fixed;
   z-index: 50;
   top: 50%;
@@ -562,29 +562,29 @@ html[data-theme="dark"] .editor-code .hljs-tag {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: kilo-pop 0.14s ease;
+  animation: opencode-pop 0.14s ease;
 }
-.kilo-dialog-title {
+.opencode-dialog-title {
   padding: 16px 18px 10px;
   font-size: 15px;
   font-weight: 600;
   margin: 0;
 }
-@keyframes kilo-fade {
+@keyframes opencode-fade {
   from {
     opacity: 0;
   }
 }
-@keyframes kilo-pop {
+@keyframes opencode-pop {
   from {
     opacity: 0;
     transform: translate(-50%, -48%) scale(0.98);
   }
 }
-.kilo-menu {
-  animation: kilo-menu-pop 0.1s ease;
+.opencode-menu {
+  animation: opencode-menu-pop 0.1s ease;
 }
-@keyframes kilo-menu-pop {
+@keyframes opencode-menu-pop {
   from {
     opacity: 0;
     transform: translateY(-2px);

@@ -2,7 +2,7 @@
  * Typed access to the Electron preload bridge.
  *
  * The app also runs in a plain browser (for pure-UI development), where
- * `window.kiloDesktop` is absent. Callers must check `desktopAvailable` and
+ * `window.opencodeDesktop` is absent. Callers must check `desktopAvailable` and
  * degrade gracefully instead of assuming the git IPC surface exists.
  */
 
@@ -190,13 +190,13 @@ export interface DesktopBridge {
 
 declare global {
   interface Window {
-    kiloDesktop?: DesktopBridge
+    opencodeDesktop?: DesktopBridge
   }
 }
 
 /** The preload bridge, or undefined when running in a plain browser. */
 export function desktopBridge(): DesktopBridge | undefined {
-  return typeof window === "undefined" ? undefined : window.kiloDesktop
+  return typeof window === "undefined" ? undefined : window.opencodeDesktop
 }
 
 /** Whether git-backed features are available in this runtime. */

@@ -369,16 +369,16 @@ function onKeydown(event: KeyboardEvent) {
             <span class="project-menu" title="Conversation actions" @click.stop><MoreHorizontal :size="14" /></span>
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
-            <DropdownMenuContent class="kilo-menu" :side-offset="4" align="start">
+            <DropdownMenuContent class="opencode-menu" :side-offset="4" align="start">
               <DropdownMenuItem
-                class="kilo-menu-item"
+                class="opencode-menu-item"
                 @select="entry.session && startRename(entry.session, entry.directory)"
               >
                 <Pencil :size="14" /> Rename conversation
               </DropdownMenuItem>
-              <DropdownMenuSeparator class="kilo-menu-sep" />
+              <DropdownMenuSeparator class="opencode-menu-sep" />
               <DropdownMenuItem
-                class="kilo-menu-item danger"
+                class="opencode-menu-item danger"
                 @select="entry.session && removeSession(entry.session.id, entry.directory)"
               >
                 <Trash2 :size="14" /> Delete conversation
@@ -565,9 +565,9 @@ function onKeydown(event: KeyboardEvent) {
   background: #9b9b9b;
 }
 .state-dot.working {
-  animation: kilo-pulse 1.4s ease-in-out infinite;
+  animation: opencode-pulse 1.4s ease-in-out infinite;
 }
-@keyframes kilo-pulse {
+@keyframes opencode-pulse {
   50% {
     opacity: 0.35;
   }

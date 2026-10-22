@@ -5,4 +5,4 @@ dist-ssr
 .DS_Store
 .vite
 search-server/data
-public/kilo-projects-studio.json
+public/opencode-projects-studio.json

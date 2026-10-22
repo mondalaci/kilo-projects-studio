@@ -2,7 +2,7 @@ import { ref } from "vue"
 
 export type Theme = "dark" | "light"
 
-const KEY = "kilo-projects-studio.theme"
+const KEY = "opencode-projects-studio.theme"
 
 function initial(): Theme {
   const stored = localStorage.getItem(KEY)

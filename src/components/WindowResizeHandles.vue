@@ -78,7 +78,7 @@ function start(event: PointerEvent, handle: { edges: Edges; cursor: string }) {
 
   const root = document.documentElement
   root.classList.add("window-resizing")
-  root.style.setProperty("--kilo-resize-cursor", handle.cursor)
+  root.style.setProperty("--opencode-resize-cursor", handle.cursor)
 
   const onMove = () => {
     if (!origin || busy) return
@@ -98,7 +98,7 @@ function start(event: PointerEvent, handle: { edges: Edges; cursor: string }) {
   const onEnd = () => {
     live = false
     root.classList.remove("window-resizing")
-    root.style.removeProperty("--kilo-resize-cursor")
+    root.style.removeProperty("--opencode-resize-cursor")
     element.removeEventListener("pointermove", onMove)
     element.removeEventListener("pointerup", onEnd)
     element.removeEventListener("pointercancel", onEnd)
