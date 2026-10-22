@@ -62,7 +62,23 @@ function isCompose(block: AssistantToolBlock): boolean {
     <div v-if="note" class="note">{{ note }}</div>
 
     <div v-else class="message" :class="isUser ? 'user' : 'assistant'">
-    <div v-if="!isUser" class="avatar" aria-hidden="true">K</div>
+    <div v-if="!isUser" class="avatar" aria-hidden="true">
+      <!-- A robot, drawn here rather than imported: a rounded head with a stub
+           antenna and side ears, and two eyes knocked out of the fill so they
+           take the tile's own colour. -->
+      <svg class="robot" viewBox="0 0 24 24">
+        <g class="robot-body">
+          <rect x="5" y="6" width="14" height="14" rx="3.5" />
+          <rect x="11.1" y="4" width="1.8" height="2.8" rx="0.9" />
+          <rect x="2.2" y="11" width="3" height="6" rx="1.3" />
+          <rect x="18.8" y="11" width="3" height="6" rx="1.3" />
+        </g>
+        <g class="robot-eyes">
+          <circle cx="9.4" cy="13" r="1.9" />
+          <circle cx="14.6" cy="13" r="1.9" />
+        </g>
+      </svg>
+    </div>
     <div class="bubble" :class="isUser ? 'user-bubble' : 'assistant-bubble'">
       <template v-if="isUser">
         <p v-if="message.type === 'user' && message.text" class="user-text">{{ message.text }}</p>
@@ -95,7 +111,7 @@ function isCompose(block: AssistantToolBlock): boolean {
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
       <div v-if="retryNote" class="retry">{{ retryNote }}</div>
     </div>
-    <div v-if="isUser" class="avatar user-avatar" aria-hidden="true"><User :size="15" /></div>
+    <div v-if="isUser" class="avatar" aria-hidden="true"><User :size="15" /></div>
     <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.model">
       <div class="meta-inner">
         <div v-if="meta.created" class="meta-row meta-datetime">{{ formatDateTime(meta.created) }}</div>
@@ -127,6 +143,9 @@ function isCompose(block: AssistantToolBlock): boolean {
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
+  /* The gutter an avatar needs: its own width plus the flex gap. Both rows
+     reserve one, so the avatars hang outside the same content width. */
+  --avatar-gutter: calc(28px + 12px);
 }
 .message.user {
   justify-content: flex-end;
@@ -135,22 +154,29 @@ function isCompose(block: AssistantToolBlock): boolean {
   justify-content: flex-start;
 }
 .avatar {
+  /* Both sides of the conversation wear the same tile; only the glyph differs. */
+  --avatar-tile: var(--bg-active);
   flex: none;
   width: 28px;
   height: 28px;
   border-radius: 8px;
   display: grid;
   place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--avatar-tile);
+  color: var(--text-muted);
   margin-top: 2px;
 }
-.user-avatar {
-  background: var(--bg-active);
-  color: var(--text-muted);
-  font-size: 10px;
+.robot {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+.robot-body {
+  fill: currentColor;
+}
+/* The eyes are the tile showing through, hence the tile's own colour. */
+.robot-eyes {
+  fill: var(--avatar-tile);
 }
 .bubble {
   min-width: 0;
@@ -158,6 +184,10 @@ function isCompose(block: AssistantToolBlock): boolean {
 }
 .assistant-bubble {
   flex: 1;
+  /* Stop one gutter short of the column edge, where the user's bubble stops, so
+     the assistant's content and the user's share one width and both avatars
+     protrude past it. */
+  margin-right: var(--avatar-gutter);
 }
 .user-bubble {
   background: var(--bubble-user);

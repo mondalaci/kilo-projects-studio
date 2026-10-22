@@ -116,15 +116,16 @@ function submit(form: FormDetail) {
   flex-direction: column;
   gap: 10px;
   max-width: var(--content-width);
-  /* Left inset matches the message avatar, like the composer, so a question
-     reads as part of the conversation rather than as a second input area. */
-  padding-left: 40px;
+  /* Inset like the composer, so a question reads as part of the conversation
+     rather than as a second input area: one gutter each side, the width the
+     message content itself occupies. */
+  padding: 0 40px;
   margin: 6px auto 0;
   width: 100%;
 }
 @media (max-width: 900px) {
   .dock {
-    padding-left: 0;
+    padding: 0;
   }
 }
 .card {

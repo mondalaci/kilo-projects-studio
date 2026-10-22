@@ -234,9 +234,9 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .composer-wrap {
-  /* Left inset matches the message avatar so the card lines up with the
-     conversation content (assistant bubble). */
-  padding: 6px 0 12px 40px;
+  /* A gutter each side, matching the message content: the avatars hang outside
+     that width, so the card lines up with the bubbles rather than with them. */
+  padding: 6px 40px 12px;
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
