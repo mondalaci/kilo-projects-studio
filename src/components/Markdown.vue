@@ -30,11 +30,32 @@ const html = computed(() => {
   return DOMPurify.sanitize(raw, { ADD_ATTR: ["target", "rel"] })
 })
 
+/** Fence names that mean "no highlighting", which is what an unlabelled block means too. */
+const PLAIN_LANGUAGES = new Set(["plaintext", "text", "txt"])
+
+/** The language a fenced block named, when it is one highlight.js actually has. */
+function blockLanguage(block: HTMLElement): string | null {
+  const match = /(?:^|\s)(?:language|lang)-([\w+#-]+)/.exec(block.className)
+  if (!match) return null
+  const language = match[1].toLowerCase()
+  if (PLAIN_LANGUAGES.has(language)) return null
+  return hljs.getLanguage(language) ? language : null
+}
+
+/**
+ * Highlight the code blocks whose fence names a language we know.
+ *
+ * An unlabelled block gives highlight.js nothing to go on, so it guesses — and a
+ * git log, a directory listing or a table comes back coloured like a program.
+ * The same goes for a name it has never heard of (`mermaid`, `pronunciation`).
+ * Anything the fence does not label is left exactly as written.
+ */
 function highlight() {
   if (!root.value) return
-  root.value.querySelectorAll("pre code").forEach((block) => {
+  root.value.querySelectorAll<HTMLElement>("pre code").forEach((block) => {
+    if (!blockLanguage(block)) return
     try {
-      hljs.highlightElement(block as HTMLElement)
+      hljs.highlightElement(block)
     } catch {
       /* unsupported language */
     }
