@@ -268,14 +268,52 @@ export class ServerClient {
     return (res?.data ?? []).slice().reverse()
   }
 
+  /**
+   * Every message in the conversation, oldest first.
+   *
+   * One page is not the conversation: the endpoint returns a page and a cursor
+   * for the next one. With `order: "asc"` the pages arrive oldest first and
+   * `cursor.next` continues forward — it walks in whichever direction the first
+   * page was ordered — so following it to the end collects the whole session.
+   * A cursor carries its own direction, so only the first request states one.
+   *
+   * `maxPages` is a guard against a cursor that never terminates, not a limit on
+   * the conversation: at the server's page size it is thousands of messages.
+   */
+  async allMessages(
+    sessionID: string,
+    opts: RequestOptions & { limit?: number; maxPages?: number } = {},
+  ): Promise<SessionMessage[]> {
+    const { limit, maxPages = 200, ...rest } = opts
+    const messages: SessionMessage[] = []
+    let cursor: string | undefined
+    for (let page = 0; page < maxPages; page++) {
+      const res = await this.request<ListEnvelope<SessionMessage>>(`/api/session/${sessionID}/message`, {
+        ...rest,
+        query: cursor ? { cursor, ...rest.query } : { order: "asc", limit, ...rest.query },
+      })
+      const items = res?.data ?? []
+      messages.push(...items)
+      const next = res?.cursor?.next
+      if (!next || items.length === 0) break
+      cursor = next
+    }
+    return messages
+  }
+
   /** The conversation as the model sees it (system + user + assistant turns). */
   async context(sessionID: string, opts: RequestOptions = {}): Promise<SessionMessage[]> {
     const res = await this.request<DataEnvelope<SessionMessage[]>>(`/api/session/${sessionID}/context`, opts)
     return res?.data ?? []
   }
 
+  /**
+   * Queue a prompt. The server answers with the user message it created, which
+   * is the same record that later appears in the conversation — so the caller
+   * can show it immediately under its real id rather than a placeholder.
+   */
   prompt(sessionID: string, input: PromptInput, opts: RequestOptions = {}) {
-    return this.request<DataEnvelope<unknown>>(`/api/session/${sessionID}/prompt`, {
+    return this.request<DataEnvelope<{ id?: string }>>(`/api/session/${sessionID}/prompt`, {
       ...opts,
       method: "POST",
       body: input,
@@ -318,11 +356,25 @@ export class ServerClient {
     return res?.data ?? []
   }
 
+  /**
+   * The sessions the server currently has a turn running for, keyed by session id.
+   *
+   * This is the only authoritative answer to "is it working right now?": the
+   * session record's `outcome` and `time.idle` are sticky and describe the last
+   * turn that *ended*.
+   */
+  async activeSessions(opts: RequestOptions = {}): Promise<Record<string, { type: string }>> {
+    const res = await this.request<DataEnvelope<Record<string, { type: string }>>>("/api/session/active", opts)
+    return res?.data ?? {}
+  }
+
   replyPermission(sessionID: string, requestID: string, reply: PermissionReply, opts: RequestOptions = {}) {
     return this.request<unknown>(`/api/session/${sessionID}/permission/${requestID}/reply`, {
       ...opts,
       method: "POST",
-      body: { reply },
+      // The field is `decision`. `reply` — which v1 used — is rejected outright:
+      // `400 Missing key at ["decision"], kind: Payload`.
+      body: { decision: reply },
     })
   }
 

@@ -38,6 +38,12 @@ const errorMessage = computed(() => {
   return props.message.error.message ?? "The model returned an error."
 })
 
+/** A turn waiting to try again after a failed step. */
+const retryNote = computed(() => {
+  if (props.message.type !== "assistant" || !props.message.retry) return null
+  return `Retrying (attempt ${props.message.retry.attempt})…`
+})
+
 const meta = computed(() => {
   if (props.message.type !== "assistant") return null
   const message = props.message
@@ -87,6 +93,7 @@ function isCompose(block: AssistantToolBlock): boolean {
       <div v-if="caret" class="caret"></div>
 
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
+      <div v-if="retryNote" class="retry">{{ retryNote }}</div>
     </div>
     <div v-if="isUser" class="avatar user-avatar" aria-hidden="true"><User :size="15" /></div>
     <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.model">
@@ -184,6 +191,12 @@ function isCompose(block: AssistantToolBlock): boolean {
   border-radius: var(--radius-sm);
   color: var(--danger);
   font-size: 13px;
+}
+.retry {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
 }
 .meta {
   position: absolute;
