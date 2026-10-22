@@ -4,7 +4,7 @@ import MessageItem from "./MessageItem.vue"
 import Spinner from "./Spinner.vue"
 import { useChat } from "@/stores/chat"
 
-const { messages, loading, currentSessionID, scrollToBottomRequest, pendingForms, pendingPermissions } = useChat()
+const { messages, loading, currentSessionID, scrollToBottomRequest, pendingForms, pendingPermissions, isBusy } = useChat()
 
 const viewport = ref<HTMLElement | null>(null)
 const pinned = ref(true)
@@ -23,6 +23,9 @@ const lastAssistantID = computed(() => {
   }
   return null
 })
+
+/** The newest message, which is the one a live turn is still appending to. */
+const lastID = computed(() => messages.value[messages.value.length - 1]?.id ?? null)
 
 function onScroll() {
   const el = viewport.value
@@ -128,6 +131,7 @@ onMounted(() => {
         :key="message.id"
         :message="message"
         :streaming="message.id === lastAssistantID && message.type === 'assistant' && !message.time?.completed"
+        :caret="isBusy && message.type === 'assistant' && message.id === lastID"
       />
     </template>
 

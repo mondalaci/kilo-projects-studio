@@ -11,7 +11,7 @@ import PartMessageCompose from "./PartMessageCompose.vue"
 import PartReasoning from "./PartReasoning.vue"
 import PartTool from "./PartTool.vue"
 
-const props = defineProps<{ message: SessionMessage; streaming?: boolean }>()
+const props = defineProps<{ message: SessionMessage; streaming?: boolean; caret?: boolean }>()
 
 const isUser = computed(() => props.message.type === "user")
 const isAssistant = computed(() => props.message.type === "assistant")
@@ -80,7 +80,11 @@ function isCompose(block: AssistantToolBlock): boolean {
         </template>
       </template>
 
-      <div v-if="streaming" class="caret"></div>
+      <!-- The caret tracks the *turn*, not this message's text: a step ends when
+           its generation does, while its tools are still running, so keying it
+           off `time.completed` left the whole tool phase with no sign of
+           progress at all. -->
+      <div v-if="caret" class="caret"></div>
 
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     </div>
