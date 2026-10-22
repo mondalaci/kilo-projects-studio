@@ -4,6 +4,7 @@ import { Check, ChevronRight, CircleAlert, Terminal } from "lucide-vue-next"
 import type { AssistantToolBlock } from "@/api/types"
 import { prettyJson, toolSummary } from "@/utils/format"
 import { toolOutputText } from "@/utils/compose"
+import { highlightLines } from "@/utils/highlight"
 import Spinner from "./Spinner.vue"
 
 const props = defineProps<{ block: AssistantToolBlock }>()
@@ -23,6 +24,32 @@ const output = computed(() => {
   return ""
 })
 const outputText = computed(() => prettyJson(output.value))
+
+/**
+ * Highlighted HTML for a tool block, or null to render the text as it is.
+ *
+ * A tool's input is an object, so it is JSON by construction; an output is only
+ * highlighted when it parses as JSON, since most tools report plain text.
+ */
+function highlightJson(code: string): string | null {
+  const lines = highlightLines(code, "json")
+  return lines ? lines.join("\n") : null
+}
+
+/** Whether a tool block's text parses as JSON. */
+function isJson(code: string): boolean {
+  const trimmed = code.trim()
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false
+  try {
+    JSON.parse(trimmed)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const inputHtml = computed(() => highlightJson(inputText.value))
+const outputHtml = computed(() => (isJson(outputText.value) ? highlightJson(outputText.value) : null))
 </script>
 
 <template>
@@ -41,11 +68,13 @@ const outputText = computed(() => prettyJson(output.value))
     <div v-show="open" class="body">
       <div class="section">
         <div class="label">Input</div>
-        <pre>{{ inputText }}</pre>
+        <pre v-if="inputHtml" v-html="inputHtml"></pre>
+        <pre v-else>{{ inputText }}</pre>
       </div>
       <div v-if="output" class="section">
         <div class="label">Output</div>
-        <pre>{{ outputText }}</pre>
+        <pre v-if="outputHtml" v-html="outputHtml"></pre>
+        <pre v-else>{{ outputText }}</pre>
       </div>
     </div>
   </div>
