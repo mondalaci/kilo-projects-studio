@@ -19,7 +19,7 @@ let touchY = 0
 
 const lastAssistantID = computed(() => {
   for (let i = messages.value.length - 1; i >= 0; i--) {
-    if (messages.value[i].info.role === "assistant") return messages.value[i].info.id
+    if (messages.value[i].type === "assistant") return messages.value[i].id
   }
   return null
 })
@@ -112,9 +112,9 @@ onMounted(() => {
     <template v-else>
       <MessageItem
         v-for="message in messages"
-        :key="message.info.id"
+        :key="message.id"
         :message="message"
-        :streaming="message.info.id === lastAssistantID && !(message.info as { time?: { completed?: number } }).time?.completed"
+        :streaming="message.id === lastAssistantID && message.type === 'assistant' && !message.time?.completed"
       />
     </template>
 

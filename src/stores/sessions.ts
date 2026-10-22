@@ -29,11 +29,8 @@ export function useSessions() {
   async function load(client: ServerClient, directory?: string, limit = DEFAULT_LIMIT) {
     loading.value = true
     try {
-      // The sidebar only needs the newest page. The full list lives behind the
-      // search page, which filters server-side so it never renders thousands of
-      // rows at once.
-      const list = await client.listSessions({ directory, query: { limit } })
-      sessions.value = list.filter((session) => !session.parentID)
+      const res = await client.listSessions({ directory, limit })
+      sessions.value = res.data.filter((session) => !session.parentID)
     } finally {
       loading.value = false
     }
@@ -44,11 +41,8 @@ export function useSessions() {
     client: ServerClient,
     opts: { directory?: string; search?: string; limit?: number } = {},
   ) {
-    const list = await client.listSessions({
-      directory: opts.directory,
-      query: { limit: opts.limit ?? DEFAULT_LIMIT, search: opts.search },
-    })
-    return list.filter((session) => !session.parentID)
+    const res = await client.listSessions({ directory: opts.directory, limit: opts.limit ?? DEFAULT_LIMIT, search: opts.search })
+    return res.data.filter((session) => !session.parentID)
   }
 
   async function create(
@@ -56,7 +50,9 @@ export function useSessions() {
     body: { title?: string; agent?: string; model?: ModelRef },
     directory?: string,
   ) {
-    const session = await client.createSession(body, { directory })
+    // v2 scopes creation through the body's `location`, not the query parameter.
+    const session = await client.createSession({ ...body, location: directory ? { directory } : undefined }, { directory })
+    if (!session) throw new Error("Session was not created")
     upsert(session)
     currentID.value = session.id
     return session
@@ -70,17 +66,40 @@ export function useSessions() {
 
   async function rename(client: ServerClient, sessionID: string, title: string, directory?: string) {
     const session = await client.updateSession(sessionID, { title }, { directory })
-    upsert(session)
+    if (session) upsert(session)
     return session
   }
 
-  function applyEvent(type: string, properties: Record<string, unknown> | undefined) {
-    if (!properties) return
+  /**
+   * Apply a v2 session event. `session.created`/`session.updated` carry only a
+   * partial session (id, title, location, projectID), so the existing row is
+   * merged rather than replaced; a full row arrives from the list/get endpoints.
+   */
+  function applyEvent(type: string, data: Record<string, unknown> | undefined) {
+    if (!data) return
     if (type === "session.created" || type === "session.updated") {
-      const info = properties.info as SessionInfo | undefined
-      if (info && !info.parentID) upsert(info)
+      const id = data.sessionID as string | undefined
+      if (!id) return
+      const existing = sessions.value.find((item) => item.id === id)
+      const directory = (data.location as { directory?: string } | undefined)?.directory
+      if (existing) {
+        upsert({ ...existing, title: (data.title as string) ?? existing.title })
+      } else if (data.parentID === undefined) {
+        // A brand-new root session: seed a minimal row; the list/get fills it in.
+        sessions.value = [
+          {
+            id,
+            projectID: data.projectID as string | undefined,
+            title: data.title as string | undefined,
+            agent: data.agent as string | undefined,
+            location: { directory: directory ?? "" },
+            time: { created: Date.now(), updated: Date.now() },
+          },
+          ...sessions.value,
+        ]
+      }
     } else if (type === "session.deleted") {
-      const id = (properties.sessionID as string) ?? (properties.info as SessionInfo | undefined)?.id
+      const id = (data.sessionID as string) ?? (data.info as { id?: string } | undefined)?.id
       if (id) {
         sessions.value = sessions.value.filter((item) => item.id !== id)
         if (currentID.value === id) currentID.value = null

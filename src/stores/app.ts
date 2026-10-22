@@ -1,5 +1,6 @@
 import type { Credentials } from "@/api/client"
 import type { InstanceInfo } from "@/api/discovery"
+import { sessionDirectory } from "@/api/types"
 import { useChat } from "./chat"
 import { useConnection } from "./connection"
 import { draft, requestComposerFocus } from "./draft"
@@ -11,7 +12,6 @@ import { useProjects } from "./projects"
 import { loadRuntimeConfig } from "./runtimeConfig"
 import { useServer } from "./server"
 import { useSessions } from "./sessions"
-import { useTools } from "./tools"
 import {
   clearPromptParams,
   readAgentParam,
@@ -28,7 +28,6 @@ export function useApp() {
   const projects = useProjects()
   const chat = useChat()
   const live = useLive()
-  const tools = useTools()
   const files = useFiles()
   const fileViewer = useFileViewer()
   const sessionState = useSessionState()
@@ -36,7 +35,7 @@ export function useApp() {
   /** Load the conversation list and event stream for the current project. */
   async function loadScoped(client: NonNullable<typeof connection.client.value>) {
     await sessions.load(client, server.directory.value)
-    await live.start(client, server.directory.value)
+    live.start(client)
   }
 
   async function connect(info: InstanceInfo, credentials?: Credentials) {
@@ -67,8 +66,8 @@ export function useApp() {
       if (target && target !== server.directory.value) await switchProject(target)
       else await loadScoped(client)
 
-      // One global stream plus a bounded sweep keeps every project's conversation
-      // state (and the tray rollup) current, not just the active project's.
+      // One global stream keeps every project's conversation state (and the tray
+      // rollup) current, not just the active project's.
       sessionState.start(client)
 
       await openInitialSession()
@@ -105,12 +104,11 @@ export function useApp() {
     sessions.currentID.value = sessionID
     sessionState.markSeen(sessionID)
     writeSessionParam(sessionID, readSessionParam() === sessionID)
-    // Refresh the session info so `current` carries fields the list omits
-    // (notably `share`), which the header share/unshare toggle depends on.
     const info = await client.getSession(sessionID, { directory: server.directory.value }).catch(() => null)
     if (info) {
       sessions.upsert(info)
-      projects.setLatest(info.directory ?? server.directory.value, info)
+      const directory = sessionDirectory(info)
+      if (directory) projects.setLatest(directory, info)
     }
     await chat.open(client, sessionID, server.directory.value)
   }
@@ -121,7 +119,7 @@ export function useApp() {
     if (!client) return false
     const info = await client.getSession(sessionID).catch(() => null)
     if (!info) return false
-    const directory = info.directory
+    const directory = sessionDirectory(info)
     if (directory && directory !== server.directory.value) await switchProject(directory)
     await selectSession(sessionID)
     return true
@@ -138,28 +136,16 @@ export function useApp() {
     if (session) await selectSession(session.id)
   }
 
-  /**
-   * Apply the runtime config's `defaultAgent` (from `kilo-projects-studio.json`) once
-   * the agent list is known. It overrides the last-used saved agent, but a
-   * `?agent=` GET param applied afterwards still takes precedence.
-   */
   async function applyRuntimeDefaults() {
     const { defaultAgent } = await loadRuntimeConfig()
-    if (defaultAgent && server.modes.value.some((mode) => mode.name === defaultAgent)) {
+    if (defaultAgent && server.modes.value.some((mode) => mode.id === defaultAgent)) {
       server.selectedAgent.value = defaultAgent
     }
   }
 
-  /**
-   * Apply one-time link params (`?agent=`, `?query=`, `?submit=`) after a
-   * connection is established. The agent is only applied when it exists, and the
-   * query is prefilled into the composer; with `submit` it is sent right away
-   * (creating a new chat if none is open) and the params are cleared so a reload
-   * does not resend it.
-   */
   async function applyLinkParams() {
     const agent = readAgentParam()
-    if (agent && server.modes.value.some((mode) => mode.name === agent)) {
+    if (agent && server.modes.value.some((mode) => mode.id === agent)) {
       server.selectedAgent.value = agent
     }
 
@@ -188,11 +174,6 @@ export function useApp() {
     await loadScoped(client)
   }
 
-  /**
-   * Open a project from the sidebar: it becomes the active project and its own
-   * conversation is shown. A project with no conversation yet gets one, so the
-   * "one conversation per project" rule always holds.
-   */
   async function openProject(directory: string) {
     const client = connection.client.value
     if (!client) return
@@ -201,11 +182,8 @@ export function useApp() {
     if (session) {
       await selectSession(session.id)
     } else {
-      // A project with no conversation yet gets its first one.
       await newChat()
     }
-    // Picking a project is the start of typing in it, so the composer takes the
-    // keyboard rather than leaving it wherever it was.
     requestComposerFocus()
   }
 
@@ -217,7 +195,7 @@ export function useApp() {
       { agent: server.selectedAgent.value, model: server.selectedModel.value ?? undefined },
       server.directory.value,
     )
-    projects.setLatest(server.directory.value, session)
+    if (server.directory.value) projects.setLatest(server.directory.value, session)
     await selectSession(session.id)
     requestComposerFocus()
     return session
@@ -236,15 +214,14 @@ export function useApp() {
       if (!session) return
       sessionID = session.id
     }
-    const parts = [...files, ...(content ? [{ type: "text" as const, text: content }] : [])]
     await chat.send(
       client,
       sessionID,
       {
-        parts,
+        text: content,
+        files: files.map((file) => ({ mime: file.mime, url: file.url, filename: file.filename })),
         model: server.selectedModel.value,
         agent: server.selectedAgent.value,
-        tools: tools.payload(),
       },
       server.directory.value,
     )
@@ -266,15 +243,9 @@ export function useApp() {
     if (target === server.directory.value && !sessions.currentID.value && sessions.sorted.value[0]) {
       await selectSession(sessions.sorted.value[0].id)
     }
-    // The deleted chat may have been the row the sidebar showed for this
-    // project, so re-read which conversation is now the newest.
     if (target) await projects.refreshOne(client, target)
   }
 
-  /**
-   * Rename a conversation. `directory` lets a project row that is not the
-   * active project be renamed without switching the whole app over to it.
-   */
   async function renameSession(sessionID: string, title: string, directory?: string) {
     const client = connection.client.value
     if (!client) return
@@ -282,56 +253,20 @@ export function useApp() {
     const info = await client.updateSession(sessionID, { title }, { directory: target })
     if (!info) return
     if (target === server.directory.value) sessions.upsert(info)
-    projects.setLatest(info.directory ?? target, info)
+    const owner = sessionDirectory(info) ?? target
+    if (owner) projects.setLatest(owner, info)
   }
 
-  /** Create/return the server-side public share link for a session. */
-  async function shareSession(sessionID: string): Promise<string | null> {
-    const client = connection.client.value
-    if (!client) return null
-    try {
-      const info = await client.shareSession(sessionID, { directory: server.directory.value })
-      if (info) sessions.upsert(info)
-      return info?.share?.url ?? null
-    } catch {
-      return null
-    }
-  }
-
-  /** Revoke a session's public share link. */
-  async function unshareSession(sessionID: string): Promise<boolean> {
-    const client = connection.client.value
-    if (!client) return false
-    try {
-      const info = await client.unshareSession(sessionID, { directory: server.directory.value })
-      // The response omits `share`; clear it explicitly so the toggle flips back.
-      if (info) sessions.upsert({ ...info, share: undefined })
-      else {
-        const existing = sessions.sessions.value.find((item) => item.id === sessionID)
-        if (existing) sessions.upsert({ ...existing, share: undefined })
-      }
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  async function replyPermission(requestID: string, reply: "once" | "always" | "reject") {
+  async function replyPermission(sessionID: string, requestID: string, reply: "once" | "always" | "reject") {
     const client = connection.client.value
     if (!client) return
-    await chat.replyPermission(client, requestID, reply, server.directory.value)
+    await chat.replyPermission(client, sessionID, requestID, reply, server.directory.value)
   }
 
-  async function replyQuestion(requestID: string, answers: string[][]) {
+  async function replyForm(sessionID: string, formID: string, answer: Record<string, unknown>) {
     const client = connection.client.value
     if (!client) return
-    await chat.replyQuestion(client, requestID, answers, server.directory.value)
-  }
-
-  async function rejectQuestion(requestID: string) {
-    const client = connection.client.value
-    if (!client) return
-    await chat.rejectQuestion(client, requestID, server.directory.value)
+    await chat.replyForm(client, sessionID, formID, answer, server.directory.value)
   }
 
   return {
@@ -354,11 +289,8 @@ export function useApp() {
     abort,
     removeSession,
     renameSession,
-    shareSession,
-    unshareSession,
     replyPermission,
-    replyQuestion,
-    rejectQuestion,
+    replyForm,
   }
 }
 

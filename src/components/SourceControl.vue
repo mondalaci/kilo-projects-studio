@@ -14,7 +14,7 @@ import { splitPath } from "@/utils/diff"
 const app = useApp()
 const git = useGit()
 const { repo, stagedRows, changeRows, total, loading, error, selection, available } = git
-const { pathInfo } = useServer()
+const { locationInfo } = useServer()
 
 /** Incremental filter over the changed files (Ctrl+P). */
 const query = ref("")
@@ -101,7 +101,7 @@ function isCursor(row: GitRow) {
 }
 
 /** Where diffs are read from: the repository root, or the project folder. */
-const rootLabel = computed(() => repo.value.root ?? pathInfo.value?.worktree ?? "")
+const rootLabel = computed(() => repo.value.root ?? locationInfo.value?.directory ?? "")
 
 const emptyMessage = computed(() => {
   if (!available.value) return "Git integration is available in the desktop app."
@@ -180,7 +180,7 @@ function parts(path: string) {
 
     <div v-if="!available || !repo.isRepo" class="notice">
       <p>{{ emptyMessage }}</p>
-      <p v-if="available && !repo.isRepo && pathInfo" class="notice-path">{{ pathInfo.worktree }}</p>
+      <p v-if="available && !repo.isRepo && locationInfo" class="notice-path">{{ locationInfo.directory }}</p>
     </div>
 
     <div v-else class="body">

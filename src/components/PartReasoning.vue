@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
-import type { ReasoningPart } from "@/api/types"
+import type { AssistantReasoningBlock } from "@/api/types"
 import Spinner from "./Spinner.vue"
 
-const props = defineProps<{ part: ReasoningPart }>()
-const streaming = computed(() => !props.part.time?.end)
+const props = defineProps<{ block: AssistantReasoningBlock }>()
+const streaming = computed(() => !props.block.time?.completed)
 
 const body = ref<HTMLElement | null>(null)
 
 watch(
-  () => props.part.text,
+  () => props.block.text,
   async () => {
     if (!streaming.value) return
     await nextTick()
@@ -24,7 +24,7 @@ watch(
     <div v-if="streaming" class="head" aria-hidden="true">
       <Spinner :size="14" />
     </div>
-    <div ref="body" class="body">{{ part.text }}</div>
+    <div ref="body" class="body">{{ block.text }}</div>
   </div>
 </template>
 

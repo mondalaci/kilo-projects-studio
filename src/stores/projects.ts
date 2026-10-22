@@ -1,6 +1,6 @@
 import { computed, ref } from "vue"
 import type { ServerClient } from "@/api/client"
-import type { Project, SessionInfo } from "@/api/types"
+import { sessionDirectory, type ProjectInfo, type SessionInfo } from "@/api/types"
 import { useServer } from "./server"
 
 /**
@@ -8,8 +8,8 @@ import { useServer } from "./server"
  *
  * The sidebar lists every project the server knows about with a single
  * conversation each — the newest one — so this store keeps one "latest session"
- * per worktree. Session events feed `applyEvent` so the row keeps tracking the
- * newest conversation without a refetch.
+ * per project directory. Session events feed `applyEvent` so the row keeps
+ * tracking the newest conversation without a refetch.
  */
 
 const latest = ref<Record<string, SessionInfo | null>>({})
@@ -32,14 +32,14 @@ const chatsPending = ref<Record<string, true>>({})
 export interface ProjectEntry {
   directory: string
   name: string
-  project: Project
+  project: ProjectInfo
   session: SessionInfo | null
 }
 
 /** The display name of a project: its registered name, else the folder name. */
-export function projectName(project: Project): string {
+export function projectName(project: ProjectInfo): string {
   if (project.name) return project.name
-  const path = project.worktree
+  const path = project.canonical
   if (!path || path === "/") return "root"
   return path.split("/").filter(Boolean).pop() ?? path
 }
@@ -78,18 +78,16 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
 export function useProjects() {
   const { projects, directory } = useServer()
 
-  /** Projects sorted by name, each with its newest conversation. */
+  /** Projects sorted by activity, each with its newest conversation. */
   const entries = computed<ProjectEntry[]>(() =>
     [...projects.value]
       .map((project) => ({
-        directory: project.worktree,
+        directory: project.canonical,
         name: projectName(project),
         project,
-        session: latest.value[project.worktree] ?? null,
+        session: latest.value[project.canonical] ?? null,
       }))
       .sort((a, b) => {
-        // Projects with a conversation come first (newest activity on top), so
-        // the list opens on what was worked on most recently.
         const aTime = a.session?.time?.updated ?? a.session?.time?.created ?? 0
         const bTime = b.session?.time?.updated ?? b.session?.time?.created ?? 0
         if (aTime !== bTime) return bTime - aTime
@@ -175,8 +173,8 @@ export function useProjects() {
     if (chatsPending.value[directory]) return
     chatsPending.value = { ...chatsPending.value, [directory]: true }
     try {
-      const list = await client.listSessions({ directory, query: { limit: CHATS_LIMIT } })
-      chats.value = { ...chats.value, [directory]: rootsByNewest(list) }
+      const res = await client.listSessions({ directory, limit: CHATS_LIMIT })
+      chats.value = { ...chats.value, [directory]: rootsByNewest(res.data) }
     } catch {
       /* leave whatever was there (usually nothing) in place */
     } finally {
@@ -217,10 +215,10 @@ export function useProjects() {
       const list = [...projects.value]
       const results = await mapLimit(list, 6, async (project) => {
         try {
-          const sessions = await client.listSessions({ directory: project.worktree, query: { limit: 10 } })
-          return [project.worktree, newestSession(sessions)] as const
+          const res = await client.listSessions({ directory: project.canonical, limit: 10 })
+          return [project.canonical, newestSession(res.data)] as const
         } catch {
-          return [project.worktree, null] as const
+          return [project.canonical, null] as const
         } finally {
           pending.value = Math.max(0, pending.value - 1)
         }
@@ -238,21 +236,31 @@ export function useProjects() {
   /** Re-read one project's newest conversation (after a new chat, say). */
   async function refreshOne(client: ServerClient, target: string) {
     try {
-      const sessions = await client.listSessions({ directory: target, query: { limit: 10 } })
-      latest.value = { ...latest.value, [target]: newestSession(sessions) }
+      const res = await client.listSessions({ directory: target, limit: 10 })
+      latest.value = { ...latest.value, [target]: newestSession(res.data) }
     } catch {
       /* leave the previous value in place */
     }
   }
 
   /** Keep a project row on its newest conversation as session events arrive. */
-  function applyEvent(type: string, properties: Record<string, unknown> | undefined) {
-    if (!properties) return
+  function applyEvent(type: string, data: Record<string, unknown> | undefined) {
+    if (!data) return
     if (type === "session.created" || type === "session.updated") {
-      const info = properties.info as SessionInfo | undefined
-      if (info?.directory && !info.parentID) setLatest(info.directory, info)
+      const directory = (data.location as { directory?: string } | undefined)?.directory
+      if (directory && !data.parentID) {
+        const existing = latest.value[directory]
+        // Only track the newest; the event's partial info is enough to update
+        // the row's title/time without a refetch.
+        if (existing && existing.id === (data.sessionID as string)) {
+          latest.value = {
+            ...latest.value,
+            [directory]: { ...existing, title: (data.title as string) ?? existing.title },
+          }
+        }
+      }
     } else if (type === "session.deleted") {
-      const id = (properties.sessionID as string) ?? (properties.info as SessionInfo | undefined)?.id
+      const id = data.sessionID as string | undefined
       if (id) forgetChat(id)
     }
   }
@@ -290,5 +298,6 @@ export function useProjects() {
     refreshOne,
     applyEvent,
     reset,
+    sessionDirectory,
   }
 }

@@ -21,11 +21,11 @@ import {
   ScrollAreaViewport,
 } from "reka-ui"
 import { Brain, Check, ChevronDown, Search } from "lucide-vue-next"
-import type { Model } from "@/api/types"
+import type { ModelCost, ModelCostTier, ModelInfo } from "@/api/types"
 import { useServer } from "@/stores/server"
 import { openRequests } from "@/stores/shortcuts"
 
-const { providerGroups, providers, selectedModel, setModel } = useServer()
+const { providerGroups, models, selectedModel, setModel } = useServer()
 
 const open = ref(false)
 const query = ref("")
@@ -43,11 +43,11 @@ function parseKey(key: string) {
 }
 
 const selectedKey = computed<string>({
-  get: () => (selectedModel.value ? modelKey(selectedModel.value.providerID, selectedModel.value.modelID) : ""),
+  get: () => (selectedModel.value ? modelKey(selectedModel.value.providerID, selectedModel.value.id) : ""),
   set: (key) => {
     const parsed = parseKey(key)
     if (!parsed) return
-    setModel({ providerID: parsed.providerID, modelID: parsed.modelID })
+    setModel({ providerID: parsed.providerID, id: parsed.modelID })
     open.value = false
   },
 })
@@ -55,8 +55,8 @@ const selectedKey = computed<string>({
 function displayValue(key: string) {
   const parsed = parseKey(key)
   if (!parsed) return ""
-  const provider = providers.value.find((item) => item.id === parsed.providerID)
-  return provider?.models?.[parsed.modelID]?.name ?? parsed.modelID
+  const model = models.value.find((item) => item.providerID === parsed.providerID && item.id === parsed.modelID)
+  return model?.name ?? parsed.modelID
 }
 
 // The combobox input is uncontrolled: its displayed text is either the selected
@@ -102,7 +102,7 @@ watch(
 
 // Keep the (uncontrolled) input showing the friendly model name. This matters
 // on first load, when the input renders its raw id before providers arrive.
-watch([providers, selectedModel], () => {
+watch([models, selectedModel], () => {
   if (open.value || query.value) return
   const node = inputNode()
   const name = displayValue(selectedKey.value)
@@ -148,8 +148,23 @@ const visibleGroups = computed(() => {
 const totalMatches = computed(() => filteredGroups.value.reduce((total, group) => total + group.models.length, 0))
 const resultCount = computed(() => visibleGroups.value.reduce((total, group) => total + group.models.length, 0))
 
-function isSelected(model: Model) {
-  return selectedModel.value?.providerID === model.providerID && selectedModel.value?.modelID === model.id
+function isSelected(model: ModelInfo) {
+  return selectedModel.value?.providerID === model.providerID && selectedModel.value?.id === model.id
+}
+
+/** v2 model cost is either a flat cost or a tiered list; flatten to the base. */
+function baseCost(model: ModelInfo): ModelCost | undefined {
+  if (!model.cost) return undefined
+  if (Array.isArray(model.cost)) {
+    const first = model.cost[0] as ModelCostTier | undefined
+    return first ? { input: first.input, output: first.output, cache: first.cache } : undefined
+  }
+  return model.cost
+}
+
+function isFree(model: ModelInfo): boolean {
+  const cost = baseCost(model)
+  return cost ? !cost.input && !cost.output : false
 }
 
 /** Compact USD-per-1M-token price: `$3/$15`. */
@@ -158,15 +173,15 @@ function price(value: number) {
   if (value >= 1) return value.toFixed(2).replace(/\.00$/, "")
   return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")
 }
-function costLabel(model: Model) {
-  if (model.isFree) return "free"
-  const cost = model.cost
+function costLabel(model: ModelInfo) {
+  if (isFree(model)) return "free"
+  const cost = baseCost(model)
   if (!cost || (!cost.input && !cost.output)) return ""
   return `$${price(cost.input)}/$${price(cost.output)}`
 }
-function costTitle(model: Model) {
-  if (model.isFree) return "Free"
-  const cost = model.cost
+function costTitle(model: ModelInfo) {
+  if (isFree(model)) return "Free"
+  const cost = baseCost(model)
   if (!cost) return ""
   return `Input $${cost.input} / 1M tokens · Output $${cost.output} / 1M tokens`
 }
@@ -175,10 +190,10 @@ function costTitle(model: Model) {
  * Colour the price by value on a log scale so cheaper models trend green and
  * expensive ones trend red. Uses the higher of input/output cost.
  */
-function costColor(model: Model): string | undefined {
+function costColor(model: ModelInfo): string | undefined {
   const free = "hsl(142 60% 45%)"
-  if (model.isFree) return free
-  const cost = model.cost
+  if (isFree(model)) return free
+  const cost = baseCost(model)
   if (!cost) return undefined
   const value = Math.max(cost.input || 0, cost.output || 0)
   if (value <= 0) return free
@@ -252,7 +267,7 @@ function costColor(model: Model): string | undefined {
                     >{{ costLabel(model) }}</span
                   >
                   <span class="kilo-model-badges">
-                    <span v-if="model.capabilities?.reasoning" class="kilo-model-tag is-reasoning">reasoning</span>
+                    <span v-if="(model.variants?.length ?? 0) > 0" class="kilo-model-tag is-reasoning">variants</span>
                   </span>
                   <ComboboxItemIndicator class="kilo-model-check"><Check :size="15" /></ComboboxItemIndicator>
                 </ComboboxItem>

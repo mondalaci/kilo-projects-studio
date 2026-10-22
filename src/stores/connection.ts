@@ -64,7 +64,7 @@ function credentialsFor(origin: string): Credentials | undefined {
   const canonical = normalizeOrigin(origin) ?? origin
   const entry = saved.value.find((item) => item.origin === canonical)
   if (!entry?.password) return undefined
-  return { username: entry.username || "kilo", password: entry.password }
+  return { username: entry.username || "opencode", password: entry.password }
 }
 
 export function useConnection() {
@@ -126,7 +126,7 @@ export function useConnection() {
         origin: probe.origin,
         product: probe.product,
         version: probe.version,
-        username: creds?.username ?? existing?.username ?? "kilo",
+        username: creds?.username ?? existing?.username ?? "opencode",
         password: creds?.password ?? existing?.password ?? "",
         lastUsed: Date.now(),
       }

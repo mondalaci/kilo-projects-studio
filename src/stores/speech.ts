@@ -68,11 +68,10 @@ const selectedVoice = ref(readStored(VOICE_KEY))
 const apiKey = ref(readStored(KEY_KEY))
 const slow = ref(readStored(SLOW_KEY) === "1")
 
-// The connected Kilo server's OpenRouter key, surfaced by its `/provider`
-// endpoint. Kept in memory only so we never copy the server secret into
-// localStorage.
+// The v2 server does not expose provider credentials over the API, so speech
+// synthesis relies on a manually entered key.
 const server = useServer()
-const serverKey = computed(() => server.providers.value.find((provider) => provider.id === "openrouter")?.key ?? "")
+const serverKey = computed(() => "")
 
 /** Manual key wins; otherwise fall back to the connected server's key. */
 const effectiveKey = computed(() => apiKey.value || serverKey.value)

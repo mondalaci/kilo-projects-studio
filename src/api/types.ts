@@ -1,403 +1,535 @@
 /**
- * Types for the Kilo Code / opencode v1 server HTTP API.
+ * Types for the opencode **v2** HTTP API (`/api/*`).
  *
- * Derived from the server's OpenAPI schema (`kilo 1.0.0`). The fork keeps the
- * opencode v1 instance API (`/session`, `/message`, `/event`, `/config`,
- * `/agent`, `/provider`) and layers extra `/kilo/*` and `/kilocode/*` routes on
- * top, so these types intentionally model the shared subset.
+ * Derived from the running server's `GET /openapi.json` (`opencode HttpApi`,
+ * 121 routes). v2 is not a prefix rename of v1: messages carry their content
+ * inline (`Session.Message.Assistant.content[]`), the event stream is
+ * `{ id, created, type, data, location?, durable? }`, and lists come back as
+ * `{ data, cursor }` envelopes.
  */
 
 export type SessionID = string
 export type MessageID = string
-export type PartID = string
+export type ProjectID = string
 
-export interface TimeRange {
-  start?: number
-  end?: number
-  created?: number
-  updated?: number
-  completed?: number
-  compacting?: number
-  archived?: number
-}
+/* --------------------------------- money ---------------------------------- */
 
-export interface Tokens {
-  total?: number
+export type USD = number
+export type USDPerMillionTokens = number
+
+export interface TokenUsage {
   input: number
   output: number
   reasoning: number
   cache: { read: number; write: number }
+  /** Absent from most payloads; the app derives totals from the fields above. */
+  total?: number
 }
 
+export interface SessionTime {
+  created: number
+  updated: number
+  idle?: number
+  viewed?: number
+  archived?: number
+}
+
+/* --------------------------------- refs ----------------------------------- */
+
 export interface ModelRef {
+  /** The model id, e.g. `deepseek/deepseek-v4.1-flash`. */
+  id: string
   providerID: string
-  modelID: string
   variant?: string
 }
+
+export interface LocationRef {
+  directory: string
+}
+
+/* -------------------------------- sessions -------------------------------- */
 
 export interface SessionInfo {
   id: SessionID
   slug?: string
-  projectID?: string
-  workspaceID?: string
-  directory?: string
-  path?: string
-  parentID?: string
-  title: string
-  version?: string
+  projectID?: ProjectID
+  parentID?: SessionID
+  fork?: { sessionID: SessionID; boundary?: unknown } | unknown
   agent?: string
-  model?: { id: string; providerID: string; variant?: string }
+  model?: ModelRef
   cost?: number
-  tokens?: Tokens
-  time: TimeRange
-  summary?: { additions: number; deletions: number; files: number }
-  share?: { url: string }
-  revert?: { messageID: string }
-  [key: string]: unknown
+  tokens?: TokenUsage
+  outcome?: "succeeded" | "failed" | "interrupted"
+  time: SessionTime
+  title?: string
+  /** Relative path within the project, when the session is scoped below it. */
+  subpath?: string
+  metadata?: Record<string, unknown>
+  permissions?: PermissionRule[]
+  revert?: { messageID: MessageID; partID?: string; snapshot?: string; files?: FileDiffInfo[] }
+  location: LocationRef
 }
 
-export interface UserMessage {
+/** The directory a session lives in (v2 nests it under `location`). */
+export function sessionDirectory(session: SessionInfo | undefined | null): string | undefined {
+  return session?.location?.directory
+}
+
+/* -------------------------------- messages -------------------------------- */
+
+export interface StructuredError {
+  type: string
+  message: string
+  status?: number
+  response?: { body: string }
+  retryAfterMs?: number
+}
+
+export interface MessageTime {
+  created: number
+  streamed?: number
+  completed?: number
+}
+
+interface MessageBase {
   id: MessageID
-  sessionID: SessionID
-  role: "user"
-  time: { created: number }
-  agent: string
-  model: ModelRef
-  system?: string
-  format?: unknown
-  summary?: { title?: string; body?: string; diffs?: unknown[] }
-  editorContext?: unknown
+  time: MessageTime
+  metadata?: Record<string, unknown>
 }
 
-export interface MessageError {
+export interface PromptFileAttachment {
+  data?: string
+  mime: string
+  source?: unknown
   name?: string
-  data?: { message?: string; [k: string]: unknown }
-  [k: string]: unknown
+  description?: string
 }
 
-export interface AssistantMessage {
-  id: MessageID
-  sessionID: SessionID
-  role: "assistant"
-  time: { created: number; completed?: number }
-  parentID: MessageID
-  modelID: string
-  providerID: string
-  mode?: string
+export interface PromptAgentAttachment {
+  name: string
+}
+
+export interface PromptSkillAttachment {
+  id: string
+  name: string
+  text?: string
+}
+
+export interface UserMessage extends MessageBase {
+  type: "user"
+  text: string
+  files?: PromptFileAttachment[]
+  agents?: PromptAgentAttachment[]
+  skills?: PromptSkillAttachment[]
+}
+
+export interface SystemMessage extends MessageBase {
+  type: "system"
+  text: string
+  description?: string
+}
+
+export interface SyntheticMessage extends MessageBase {
+  type: "synthetic"
+  text: string
+  description?: string
+}
+
+export interface SkillMessage extends MessageBase {
+  type: "skill"
+  skill: string
+  name: string
+  text: string
+}
+
+export interface ShellMessage extends MessageBase {
+  type: "shell"
+  shellID: string
+  command: string
+  status: "running" | "exited" | "timeout" | "killed"
+  exit?: number | string
+  output?: { output: string; cursor: number; size: number; truncated: boolean }
+}
+
+export interface IdleMessage extends MessageBase {
+  type: "idle"
+  outcome: "succeeded" | "failed" | "interrupted"
+  error?: StructuredError
+}
+
+export interface ModelSelectedMessage extends MessageBase {
+  type: "model-switched"
+  model: ModelRef
+  previous?: ModelRef
+}
+
+export interface AgentSelectedMessage extends MessageBase {
+  type: "agent-switched"
   agent: string
-  path?: { cwd: string; root: string }
-  summary?: boolean
-  cost: number
-  tokens: Tokens
-  variant?: string
-  finish?: string
-  error?: MessageError
+  previous?: string
 }
 
-export type MessageInfo = UserMessage | AssistantMessage
+export interface LocationSwitchedMessage extends MessageBase {
+  type: "location-switched"
+  location: LocationRef
+  projectID?: ProjectID
+  subpath?: string
+}
 
-export interface TextPart {
-  id: PartID
-  sessionID: SessionID
-  messageID: MessageID
+export interface CompactionMessage extends MessageBase {
+  type: "compaction"
+  status: "running" | "completed" | "failed"
+  reason: "auto" | "manual"
+  summary?: string
+  model?: ModelRef
+  error?: StructuredError
+  cost?: number
+  tokens?: TokenUsage
+}
+
+/* ----------------------------- tool + content ----------------------------- */
+
+export interface ToolTextContent {
   type: "text"
   text: string
-  synthetic?: boolean
-  ignored?: boolean
-  time?: TimeRange
-  metadata?: Record<string, unknown>
 }
-
-export interface ReasoningPart {
-  id: PartID
-  sessionID: SessionID
-  messageID: MessageID
-  type: "reasoning"
-  text: string
-  time?: TimeRange
-  metadata?: Record<string, unknown>
-}
-
-export interface FilePart {
-  id: PartID
-  sessionID: SessionID
-  messageID: MessageID
+export interface ToolFileContent {
   type: "file"
+  uri: string
   mime: string
-  filename?: string
-  url: string
-  source?: unknown
+  name?: string | null
 }
+export type ToolContent = ToolTextContent | ToolFileContent
 
-export interface ToolStatePending {
-  status: "pending"
-  input: Record<string, unknown>
-  raw: string
+export interface ToolStateStreaming {
+  status: "streaming"
+  /** Raw, partially parsed JSON input. */
+  input: string
 }
 export interface ToolStateRunning {
   status: "running"
   input: Record<string, unknown>
-  title?: string
   metadata?: Record<string, unknown>
-  time: TimeRange
 }
 export interface ToolStateCompleted {
   status: "completed"
   input: Record<string, unknown>
-  output: string
-  title: string
-  metadata: Record<string, unknown>
-  time: TimeRange
-  attachments?: FilePart[]
+  content: ToolContent[]
+  metadata?: Record<string, unknown>
 }
 export interface ToolStateError {
   status: "error"
   input: Record<string, unknown>
-  error: string
+  error: StructuredError
+  content?: ToolContent[]
   metadata?: Record<string, unknown>
-  time: TimeRange
 }
-export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
+export type ToolState = ToolStateStreaming | ToolStateRunning | ToolStateCompleted | ToolStateError
 
-export interface ToolPart {
-  id: PartID
-  sessionID: SessionID
-  messageID: MessageID
+export interface AssistantTextBlock {
+  type: "text"
+  text: string
+}
+export interface AssistantReasoningBlock {
+  type: "reasoning"
+  text: string
+  time?: { created: number; completed?: number }
+}
+export interface AssistantToolBlock {
   type: "tool"
-  callID: string
-  tool: string
-  state: ToolState
-  metadata?: Record<string, unknown>
-}
-
-export interface ScaffoldPart {
-  id: PartID
-  sessionID: SessionID
-  messageID: MessageID
-  type: string
-  [k: string]: unknown
-}
-
-export type Part =
-  | TextPart
-  | ReasoningPart
-  | FilePart
-  | ToolPart
-  | (ScaffoldPart & { type: "step-start" | "step-finish" | "snapshot" | "patch" | "agent" | "retry" | "compaction" | "subtask" })
-
-export interface MessageWithParts {
-  info: MessageInfo
-  parts: Part[]
-}
-
-export interface Agent {
+  /** Tool-call id. */
+  id: string
+  /** Tool name. */
   name: string
-  displayName?: string
-  description?: string
-  source?: string
-  mode: "primary" | "subagent" | "all"
-  native?: boolean
-  hidden?: boolean
-  deprecated?: boolean
-  color?: string
-  model?: { modelID: string; providerID: string }
-  variant?: string
-  permission?: PermissionRule[]
-  [k: string]: unknown
+  state: ToolState
+  time: { created: number; ran?: number; completed?: number }
+  executed?: boolean
+}
+export type AssistantBlock = AssistantTextBlock | AssistantReasoningBlock | AssistantToolBlock
+
+export interface AssistantMessage extends MessageBase {
+  type: "assistant"
+  agent: string
+  model: ModelRef
+  content: AssistantBlock[]
+  finish?: string
+  rawFinish?: string
+  cost?: number
+  tokens?: TokenUsage
+  error?: StructuredError
+  retry?: { attempt: number; at: number; error: StructuredError }
+  snapshot?: { start?: string; end?: string; files?: string[] }
 }
 
-export interface PermissionRule {
-  permission: string
-  pattern: string
-  action: "allow" | "ask" | "deny"
+export type SessionMessage =
+  | UserMessage
+  | AssistantMessage
+  | SystemMessage
+  | SyntheticMessage
+  | SkillMessage
+  | ShellMessage
+  | IdleMessage
+  | ModelSelectedMessage
+  | AgentSelectedMessage
+  | LocationSwitchedMessage
+  | CompactionMessage
+
+/* ---------------------------- agents + models ----------------------------- */
+
+export interface AgentInfo {
+  id: string
+  name: string
+  mode: "primary" | "subagent" | "all"
+  hidden?: boolean
+  model?: ModelRef
+  description?: string
+  color?: string
+  system?: string
+  steps?: number
+  permissions?: PermissionRule[]
 }
 
 export interface ModelCapabilities {
-  temperature: boolean
-  reasoning: boolean
-  attachment: boolean
-  toolcall: boolean
-  input: Record<string, boolean>
-  output: Record<string, boolean>
-  interleaved?: boolean | { field: string }
+  tools: boolean
+  input: string[]
+  output: string[]
+  temperature?: boolean
 }
 
+export interface ModelCostTier {
+  tier: { type: "context"; size: number }
+  input: USDPerMillionTokens
+  output: USDPerMillionTokens
+  cache: { read: USDPerMillionTokens; write: USDPerMillionTokens }
+}
 export interface ModelCost {
-  /** USD per 1M input tokens. */
-  input: number
-  /** USD per 1M output tokens. */
-  output: number
-  cache?: { read: number; write: number }
-  tiers?: Array<{ input: number; output: number; cache?: { read: number; write: number }; tier: { type: string; size: number } }>
-  experimentalOver200K?: { input: number; output: number; cache?: { read: number; write: number } }
+  input: USDPerMillionTokens
+  output: USDPerMillionTokens
+  cache: { read: USDPerMillionTokens; write: USDPerMillionTokens }
 }
 
-export interface Model {
+export interface ModelVariant {
   id: string
+  settings?: Record<string, unknown>
+}
+
+export interface ModelInfo {
+  id: string
+  modelID: string
   providerID: string
   name: string
   family?: string
-  status?: "alpha" | "beta" | "deprecated" | "active"
   capabilities: ModelCapabilities
-  cost?: ModelCost
-  limit?: { context: number; output: number; input?: number }
+  variants: ModelVariant[]
+  cost?: ModelCost | ModelCostTier[]
+  limit: { context: number; input?: number; output: number }
+  status: "alpha" | "beta" | "deprecated" | "active"
+  enabled?: boolean
+  time?: { released: number }
+  settings?: Record<string, unknown>
   options?: Record<string, unknown>
-  variants?: Record<string, unknown>
-  isFree?: boolean
-  release_date?: string
-  [k: string]: unknown
 }
 
-export interface Provider {
+export interface ProviderInfo {
   id: string
   name: string
-  source: string
-  env?: string[]
-  key?: string
-  options?: Record<string, unknown>
-  models: Record<string, Model>
-  [k: string]: unknown
+  activation: "auto" | "enabled" | "disabled"
+  package?: string
+  settings?: Record<string, unknown>
+  models?: Record<string, ModelInfo>
 }
 
-export interface ProviderList {
-  all: Provider[]
-  default: Record<string, string>
-  connected: string[]
-  failed: string[]
+/* -------------------------------- projects -------------------------------- */
+
+export interface ProjectInfo {
+  id: ProjectID
+  canonical: string
+  name?: string
+  vcs?: string
+  icon?: { url?: string; override?: string; color?: string }
+  commands?: { start?: string }
+  time: { created: number; updated: number; active: number; archived?: number }
+  sandboxes?: string[]
+}
+
+/** The directory a project lives in. */
+export function projectDirectory(project: ProjectInfo): string {
+  return project.canonical
+}
+
+/* ----------------------------- config + misc ------------------------------ */
+
+export interface CommandInfo {
+  name: string
+  description?: string
 }
 
 export interface ServerConfig {
   $schema?: string
-  model?: string
+  model?: string | { providerID: string; model: string; variant?: string }
   small_model?: string
   default_agent?: string
-  agent?: Record<string, unknown>
-  mode?: Record<string, unknown>
   username?: string
-  [k: string]: unknown
+  agents?: Record<string, unknown>
+  [key: string]: unknown
 }
 
-export interface Todo {
+export interface ServerInfo {
+  version: string
+  pid: number
+  urls: string[]
+  paths: { tmp: string }
+  capabilities?: { persistentPty?: boolean | null } | null
+}
+
+export interface LocationInfo {
+  directory: string
+  project: { id: ProjectID; directory: string; canonical: string }
+}
+
+export interface SkillInfo {
   id: string
+  name: string
+  description?: string
+  autoinvoke?: boolean
+  path: string
   content: string
-  status: "pending" | "in_progress" | "completed" | "cancelled" | string
-  priority?: string
 }
 
-export type SessionStatus =
-  | { type: "idle" }
-  | { type: "busy" }
-  | { type: "retry"; attempt: number; message: string; next: number }
-  | { type: "offline"; requestID: string; message: string }
+/* ------------------------- permissions + forms ---------------------------- */
+
+export type PermissionEffect = "allow" | "deny" | "ask"
+export type PermissionReply = "once" | "always" | "reject"
+
+export interface PermissionRule {
+  action: string
+  resource: string
+  effect: PermissionEffect
+}
 
 export interface PermissionRequest {
   id: string
   sessionID: SessionID
-  permission: string
-  patterns: string[]
-  metadata: Record<string, unknown>
-  always?: string[]
-  tool?: { messageID: string; callID: string }
+  action: string
+  resources: string[]
+  save?: string[]
+  metadata?: Record<string, unknown>
+  source?: { type: "tool"; messageID: string; id: string }
+  message?: string
 }
 
-export interface QuestionOption {
+export type FormFieldType = "string" | "number" | "integer" | "boolean" | "multiselect" | "external"
+
+export interface FormOption {
+  value: string
   label: string
-  description: string
-  mode?: string
-}
-
-export interface QuestionInfo {
-  question: string
-  header: string
-  options: QuestionOption[]
-  multiple?: boolean
-  default?: string
-  custom?: boolean
-}
-
-export interface QuestionRequest {
-  id: string
-  sessionID: SessionID
-  questions: QuestionInfo[]
-  blocking?: boolean
-}
-
-export interface Command {
-  name: string
   description?: string
-  agent?: string
-  model?: string
-  source?: string
-  template: string
-  hints?: string[]
 }
 
-export interface PathInfo {
-  home: string
-  state: string
-  config: string
-  worktree: string
-  directory: string
+export interface FormField {
+  key: string
+  type: FormFieldType
+  title?: string
+  description?: string
+  required?: boolean
+  hidden?: boolean
+  format?: string
+  default?: unknown
+  options?: FormOption[]
+  custom?: boolean
+  url?: string
+  minLength?: number
+  maxLength?: number
+  minimum?: number
+  maximum?: number
+  minItems?: number
+  maxItems?: number
 }
 
-export interface Project {
+export interface FormState {
+  status: "pending" | "answered" | "cancelled"
+  answer?: Record<string, unknown>
+  message?: string
+}
+
+export interface FormInfo {
   id: string
-  worktree: string
-  name?: string
-  vcs?: { type?: string; branch?: string } | unknown
-  icon?: unknown
-  time?: unknown
-  sandboxes?: string[]
+  sessionID: string
+  title: string
+  metadata?: Record<string, unknown>
+  fields: FormField[]
 }
 
-export interface ModelState {
-  /** Per-agent chosen model. */
-  model: Record<string, ModelRef>
-  recent: ModelRef[]
-  favorite: ModelRef[]
-  variant: Record<string, string>
+export interface FormDetail extends FormInfo {
+  state: FormState
 }
 
-export interface ToolListItem {
-  id: string
-  description: string
-  parameters?: unknown
+/* ----------------------------------- vcs ---------------------------------- */
+
+export interface FileDiffInfo {
+  file: string
+  additions: number
+  deletions: number
+  status?: string
 }
 
-/* -------------------------------------------------------------------------- */
-/* Events                                                                     */
-/* -------------------------------------------------------------------------- */
-
-export interface BaseEvent {
-  id?: string
-  type: string
-  properties?: Record<string, unknown>
-}
-
-export interface SyncEnvelope {
-  type: "sync"
-  syncEvent: {
-    id: string
-    type: string
-    seq: number
-    aggregateID?: string
-    data: Record<string, unknown>
-  }
-}
-
-export type ServerEvent = BaseEvent | SyncEnvelope
+/* --------------------------------- events --------------------------------- */
 
 /**
- * One frame of the global (`/global/event`) stream: an event from any project,
- * tagged with the directory it came from.
+ * One frame of the v2 event stream (`GET /api/event`).
+ *
+ * The server sends `{ id, created, type, data, location?, durable? }` on the
+ * `data:` line, so `properties` (v1) becomes `data` here.
  */
-export interface GlobalEventEnvelope {
-  directory?: string
-  project?: string
-  payload?: ServerEvent
+export interface ServerEvent {
+  id?: string
+  created?: number
+  type: string
+  data?: Record<string, unknown>
+  location?: LocationRef
+  durable?: { aggregateID: string; seq: number; version: number }
+  metadata?: Record<string, unknown>
 }
 
-export interface GlobalHealth {
-  healthy: true
-  version: string
+/** The v2 event's payload, named `properties` for the store handlers. */
+export function eventData(event: ServerEvent): Record<string, unknown> | undefined {
+  return event.data
+}
+
+/* -------------------------------- envelopes ------------------------------- */
+
+export interface DataEnvelope<T> {
+  data: T
+  location?: LocationRef
+}
+export interface Cursor {
+  previous?: string | null
+  next?: string | null
+}
+export interface ListEnvelope<T> {
+  data: T[]
+  cursor?: Cursor
+}
+
+/* ------------------------------ chat helpers ------------------------------ */
+
+/** A conversation as the chat store keeps it: the v2 message, verbatim. */
+export type ChatMessage = SessionMessage
+
+/** True for an assistant message that has not finished streaming. */
+export function isAssistant(message: SessionMessage): message is AssistantMessage {
+  return message.type === "assistant"
+}
+
+/** Concatenate the text blocks of an assistant message. */
+export function assistantText(message: AssistantMessage): string {
+  return message.content
+    .filter((block): block is AssistantTextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+}
+
+/** The tool blocks of an assistant message, in order. */
+export function assistantTools(message: AssistantMessage): AssistantToolBlock[] {
+  return message.content.filter((block): block is AssistantToolBlock => block.type === "tool")
 }

@@ -2,26 +2,29 @@
 import { computed, ref } from "vue"
 import { openImage } from "@/stores/lightbox"
 import { Check, ChevronDown, ChevronRight, Copy, Download, File as FileIcon, ExternalLink } from "lucide-vue-next"
-import type { FilePart } from "@/api/types"
 import { dataUrlByteLength, dataUrlText, dataUrlToBlob, formatBytes, isDataUrl, isTextMime } from "@/utils/file"
 
-const props = defineProps<{ part: FilePart }>()
+/**
+ * A single file attachment. Accepts either a URL/URI or inline base64 `data`
+ * (which v2 user messages and tool outputs both use).
+ */
+const props = defineProps<{ url?: string; mime?: string; filename?: string; data?: string }>()
 
 /** Cap inline previews so a huge text file cannot freeze the view. */
 const MAX_PREVIEW = 100_000
 
-const url = computed(() => props.part.url ?? "")
-const mime = computed(() => props.part.mime ?? "")
-const name = computed(() => props.part.filename || mime.value || "file")
+const resolvedUrl = computed(() => props.url ?? (props.data ? `data:${props.mime ?? "application/octet-stream"};base64,${props.data}` : ""))
+const mime = computed(() => props.mime ?? "")
+const name = computed(() => props.filename || mime.value || "file")
 
 const isImage = computed(
-  () => mime.value.startsWith("image/") && (isDataUrl(url.value) || /^https?:/.test(url.value)),
+  () => mime.value.startsWith("image/") && (isDataUrl(resolvedUrl.value) || /^https?:/.test(resolvedUrl.value)),
 )
-const isRemote = computed(() => /^https?:/.test(url.value))
-const canDecode = computed(() => isDataUrl(url.value))
-const size = computed(() => (canDecode.value ? dataUrlByteLength(url.value) : 0))
+const isRemote = computed(() => /^https?:/.test(resolvedUrl.value))
+const canDecode = computed(() => isDataUrl(resolvedUrl.value))
+const size = computed(() => (canDecode.value ? dataUrlByteLength(resolvedUrl.value) : 0))
 
-const previewText = computed(() => (canDecode.value && isTextMime(mime.value) ? dataUrlText(url.value) : null))
+const previewText = computed(() => (canDecode.value && isTextMime(mime.value) ? dataUrlText(resolvedUrl.value) : null))
 const truncated = computed(() => previewText.value != null && previewText.value.length > MAX_PREVIEW)
 
 const expanded = ref(false)
@@ -29,7 +32,7 @@ const copied = ref(false)
 
 function toggle() {
   if (isRemote.value) {
-    window.open(url.value, "_blank", "noopener")
+    window.open(resolvedUrl.value, "_blank", "noopener")
     return
   }
   expanded.value = !expanded.value
@@ -37,12 +40,12 @@ function toggle() {
 
 function objectUrl(): string | null {
   if (!canDecode.value) return null
-  return URL.createObjectURL(dataUrlToBlob(url.value) ?? new Blob())
+  return URL.createObjectURL(dataUrlToBlob(resolvedUrl.value) ?? new Blob())
 }
 
 function download() {
-  const blob = canDecode.value ? dataUrlToBlob(url.value) : null
-  const href = blob ? URL.createObjectURL(blob) : url.value
+  const blob = canDecode.value ? dataUrlToBlob(resolvedUrl.value) : null
+  const href = blob ? URL.createObjectURL(blob) : resolvedUrl.value
   const anchor = document.createElement("a")
   anchor.href = href
   anchor.download = name.value
@@ -54,7 +57,7 @@ function download() {
 
 function openInTab() {
   if (isRemote.value) {
-    window.open(url.value, "_blank", "noopener")
+    window.open(resolvedUrl.value, "_blank", "noopener")
     return
   }
   const href = objectUrl()
@@ -79,11 +82,11 @@ async function copy() {
   <div class="part-file">
     <img
       v-if="isImage"
-      :src="url"
+      :src="resolvedUrl"
       :alt="name"
       class="zoomable"
       title="Click to enlarge"
-      @click="openImage(url, name)"
+      @click="openImage(resolvedUrl, name)"
     />
 
     <template v-else>
@@ -122,7 +125,6 @@ async function copy() {
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
-/* Clicking enlarges it to the window; clicking again brings this size back. */
 .part-file img.zoomable {
   cursor: zoom-in;
 }

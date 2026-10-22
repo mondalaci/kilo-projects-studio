@@ -1,22 +1,24 @@
 import type {
-  Agent,
-  Command,
-  GlobalHealth,
-  MessageWithParts,
+  AgentInfo,
+  CommandInfo,
+  DataEnvelope,
+  FormDetail,
+  FormInfo,
+  ListEnvelope,
+  LocationInfo,
+  ModelInfo,
   ModelRef,
-  ModelState,
-  PathInfo,
-  Project,
-  ProviderList,
-  ServerConfig,
-  SessionInfo,
-  SessionStatus,
-  ServerEvent,
-  GlobalEventEnvelope,
   PermissionRequest,
-  QuestionRequest,
-  Todo,
-  ToolListItem,
+  PermissionReply,
+  ProjectInfo,
+  ProviderInfo,
+  ServerConfig,
+  ServerEvent,
+  ServerInfo,
+  SessionID,
+  SessionInfo,
+  SessionMessage,
+  SkillInfo,
 } from "./types"
 
 export interface Credentials {
@@ -41,7 +43,7 @@ export class ServerError extends Error {
 
 export interface RequestOptions {
   method?: string
-  /** Instance directory (project) to scope the request to. */
+  /** Instance directory (project) to scope the request to (`/api` `directory`). */
   directory?: string
   query?: Record<string, string | number | boolean | undefined>
   body?: unknown
@@ -52,15 +54,12 @@ export interface RequestOptions {
 }
 
 /**
- * A request that never settles keeps its socket open forever. A handful of
- * those exhaust the browser's per-origin connection pool, after which every
- * later request (health probes included) queues indefinitely and the app looks
- * dead. Giving each request a deadline keeps a stalled response from wedging
- * the whole origin.
+ * A request that never settles keeps its socket open forever, and a handful of
+ * those exhaust the browser's per-origin connection pool. Giving each request a
+ * deadline keeps a stalled response from wedging the whole origin.
  */
 const DEFAULT_TIMEOUT_MS = 30_000
 
-/** Combine a caller signal with a timeout into one abortable signal. */
 function withDeadline(signal: AbortSignal | undefined, timeoutMs: number) {
   const controller = new AbortController()
   const timer =
@@ -81,12 +80,21 @@ function withDeadline(signal: AbortSignal | undefined, timeoutMs: number) {
   }
 }
 
+export interface PromptInput {
+  text?: string
+  files?: Array<{ uri: string; name?: string }>
+  agents?: Array<{ name: string }>
+  skills?: Array<{ id: string; name: string }>
+  metadata?: Record<string, unknown>
+  messageID?: string
+}
+
 /**
- * Thin client over the opencode v1 / kilo HTTP API.
+ * Thin client over the opencode **v2** HTTP API (`/api/*`).
  *
- * Auth is HTTP Basic, matching the server's optional `KILO_SERVER_PASSWORD`.
- * All instance-scoped endpoints accept a `directory` query parameter that
- * selects the project instance on the server.
+ * Auth is HTTP Basic; the server always requires it. Instance-scoped endpoints
+ * accept a `directory` query parameter that selects the project instance, which
+ * is how one server multiplexes many projects.
  */
 export class ServerClient {
   readonly origin: string
@@ -95,7 +103,7 @@ export class ServerClient {
   constructor(origin: string, credentials?: Credentials) {
     this.origin = origin.replace(/\/+$/, "")
     if (credentials?.password) {
-      const token = btoa(`${credentials.username || "kilo"}:${credentials.password}`)
+      const token = btoa(`${credentials.username || "opencode"}:${credentials.password}`)
       this.authHeader = `Basic ${token}`
     }
   }
@@ -140,164 +148,201 @@ export class ServerClient {
 
   /* ------------------------------ health/config ----------------------------- */
 
-  health(signal?: AbortSignal) {
-    return this.request<GlobalHealth>("/global/health", { signal })
+  /** Server build info; doubles as the reachability/auth probe. */
+  info(signal?: AbortSignal) {
+    return this.request<ServerInfo>("/api/info", { signal })
   }
 
-  path(opts: RequestOptions = {}) {
-    return this.request<PathInfo>("/path", opts)
+  location(opts: RequestOptions = {}) {
+    return this.request<LocationInfo>("/api/location", opts)
   }
 
-  projects(opts: RequestOptions = {}) {
-    return this.request<Project[]>("/project", opts)
+  async config(opts: RequestOptions = {}): Promise<ServerConfig> {
+    // `/api/config` returns an array of config documents; flatten to the first
+    // document's info, which is the merged user config.
+    const docs = await this.request<Array<{ type?: string; path?: string; info?: ServerConfig }>>("/api/config", opts)
+    return (Array.isArray(docs) ? docs.find((doc) => doc?.info)?.info : undefined) ?? {}
   }
 
-  config(opts: RequestOptions = {}) {
-    return this.request<ServerConfig>("/config", opts)
+  async projects(opts: RequestOptions = {}): Promise<ProjectInfo[]> {
+    return this.request<ProjectInfo[]>("/api/project", opts)
   }
 
-  agents(opts: RequestOptions = {}) {
-    return this.request<Agent[]>("/agent", opts)
+  async agents(opts: RequestOptions = {}): Promise<AgentInfo[]> {
+    const res = await this.request<DataEnvelope<AgentInfo[]>>("/api/agent", opts)
+    return res?.data ?? []
   }
 
-  providers(opts: RequestOptions = {}) {
-    return this.request<ProviderList>("/provider", opts)
+  async providers(opts: RequestOptions = {}): Promise<ProviderInfo[]> {
+    const res = await this.request<DataEnvelope<ProviderInfo[]>>("/api/provider", opts)
+    return res?.data ?? []
   }
 
-  modelState(opts: RequestOptions = {}) {
-    return this.request<ModelState>("/config/model-state", opts)
+  async models(opts: RequestOptions = {}): Promise<ModelInfo[]> {
+    const res = await this.request<DataEnvelope<ModelInfo[]>>("/api/model", opts)
+    return res?.data ?? []
   }
 
-  commands(opts: RequestOptions = {}) {
-    return this.request<Command[]>("/command", opts)
+  async commands(opts: RequestOptions = {}): Promise<CommandInfo[]> {
+    const res = await this.request<DataEnvelope<CommandInfo[]>>("/api/command", opts)
+    return res?.data ?? []
   }
 
-  toolIds(opts: RequestOptions = {}) {
-    return this.request<string[]>("/experimental/tool/ids", opts)
-  }
-
-  tools(opts: RequestOptions = {}) {
-    return this.request<ToolListItem[]>("/experimental/tool", opts)
+  async skills(opts: RequestOptions = {}): Promise<SkillInfo[]> {
+    const res = await this.request<DataEnvelope<SkillInfo[]>>("/api/skill", opts)
+    return res?.data ?? []
   }
 
   /* -------------------------------- sessions -------------------------------- */
 
-  listSessions(opts: RequestOptions = {}) {
-    return this.request<SessionInfo[]>("/session", { ...opts, query: { roots: "true", ...opts.query } })
+  async listSessions(
+    opts: RequestOptions & { limit?: number; search?: string; cursor?: string } = {},
+  ): Promise<ListEnvelope<SessionInfo>> {
+    const { limit, search, cursor, ...rest } = opts
+    return this.request<ListEnvelope<SessionInfo>>("/api/session", {
+      ...rest,
+      query: { limit, search, cursor, ...rest.query },
+    })
   }
 
-  createSession(body: { title?: string; agent?: string; model?: ModelRef; parentID?: string }, opts: RequestOptions = {}) {
-    // The create endpoint names the model field `id`, while prompt endpoints use
-    // `modelID`. Normalize here so callers can keep passing a ModelRef.
-    const payload = {
-      ...body,
-      model: body.model
-        ? { id: body.model.modelID, providerID: body.model.providerID, variant: body.model.variant }
-        : undefined,
-    }
-    return this.request<SessionInfo>("/session", { ...opts, method: "POST", body: payload })
+  async getSession(sessionID: string, opts: RequestOptions = {}): Promise<SessionInfo | null> {
+    const res = await this.request<DataEnvelope<SessionInfo>>(`/api/session/${sessionID}`, opts)
+    return res?.data ?? null
   }
 
-  getSession(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<SessionInfo>(`/session/${sessionID}`, opts)
+  async createSession(
+    body: { title?: string; agent?: string; model?: ModelRef; parentID?: string; location?: { directory: string } } = {},
+    opts: RequestOptions = {},
+  ): Promise<SessionInfo | null> {
+    const res = await this.request<DataEnvelope<SessionInfo>>("/api/session", {
+      ...opts,
+      method: "POST",
+      body,
+    })
+    return res?.data ?? null
   }
 
-  updateSession(sessionID: string, body: { title?: string }, opts: RequestOptions = {}) {
-    return this.request<SessionInfo>(`/session/${sessionID}`, { ...opts, method: "PATCH", body })
+  async updateSession(sessionID: string, body: { title?: string }, opts: RequestOptions = {}): Promise<SessionInfo | null> {
+    const res = await this.request<DataEnvelope<SessionInfo>>(`/api/session/${sessionID}`, {
+      ...opts,
+      method: "PATCH",
+      body,
+    })
+    return res?.data ?? null
   }
 
   deleteSession(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<boolean>(`/session/${sessionID}`, { ...opts, method: "DELETE" })
+    return this.request<void>(`/api/session/${sessionID}`, { ...opts, method: "DELETE" })
   }
 
-  shareSession(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<SessionInfo>(`/session/${sessionID}/share`, { ...opts, method: "POST" })
-  }
-
-  unshareSession(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<SessionInfo>(`/session/${sessionID}/share`, { ...opts, method: "DELETE" })
-  }
-
-  messages(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<MessageWithParts[]>(`/session/${sessionID}/message`, opts)
-  }
-
-  todos(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<Todo[]>(`/session/${sessionID}/todo`, opts)
-  }
-
-  prompt(
+  async messages(
     sessionID: string,
-    body: {
-      parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string; filename?: string }>
-      model?: ModelRef
-      agent?: string
-      variant?: string
-      tools?: Record<string, boolean>
-      messageID?: string
-      system?: string
-    },
-    opts: RequestOptions = {},
-  ) {
-    return this.request<void>(`/session/${sessionID}/prompt_async`, { ...opts, method: "POST", body })
+    opts: RequestOptions & { limit?: number; order?: "asc" | "desc" } = {},
+  ): Promise<SessionMessage[]> {
+    const { limit, order, ...rest } = opts
+    const res = await this.request<ListEnvelope<SessionMessage>>(`/api/session/${sessionID}/message`, {
+      ...rest,
+      query: { limit, order: order ?? "asc", ...rest.query },
+    })
+    return res?.data ?? []
+  }
+
+  /** The conversation as the model sees it (system + user + assistant turns). */
+  async context(sessionID: string, opts: RequestOptions = {}): Promise<SessionMessage[]> {
+    const res = await this.request<DataEnvelope<SessionMessage[]>>(`/api/session/${sessionID}/context`, opts)
+    return res?.data ?? []
+  }
+
+  prompt(sessionID: string, input: PromptInput, opts: RequestOptions = {}) {
+    return this.request<DataEnvelope<unknown>>(`/api/session/${sessionID}/prompt`, {
+      ...opts,
+      method: "POST",
+      body: input,
+    })
   }
 
   command(
     sessionID: string,
-    body: { command: string; arguments: string; agent?: string; model?: string; variant?: string },
+    body: { command: string; arguments?: string; agent?: string; model?: string },
     opts: RequestOptions = {},
   ) {
-    return this.request<unknown>(`/session/${sessionID}/command`, { ...opts, method: "POST", body })
+    return this.request<DataEnvelope<unknown>>(`/api/session/${sessionID}/command`, {
+      ...opts,
+      method: "POST",
+      body,
+    })
   }
 
-  abort(sessionID: string, opts: RequestOptions = {}) {
-    return this.request<boolean>(`/session/${sessionID}/abort`, { ...opts, method: "POST" })
+  interrupt(sessionID: string, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/interrupt`, { ...opts, method: "POST" })
   }
 
-  /** Current status of every session the given project knows about. */
-  sessionStatus(opts: RequestOptions = {}) {
-    return this.request<Record<string, SessionStatus>>("/session/status", opts)
+  setModel(sessionID: string, model: ModelRef, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/model`, { ...opts, method: "POST", body: { model } })
   }
 
-  /* ------------------------- permissions and questions ---------------------- */
-
-  listPermissions(opts: RequestOptions = {}) {
-    return this.request<PermissionRequest[]>("/permission", opts)
+  setAgent(sessionID: string, agent: string, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/agent`, { ...opts, method: "POST", body: { agent } })
   }
 
-  replyPermission(requestID: string, reply: "once" | "always" | "reject", opts: RequestOptions = {}) {
-    return this.request<boolean>(`/permission/${requestID}/reply`, { ...opts, method: "POST", body: { reply } })
+  /* ------------------------- permissions and forms -------------------------- */
+
+  async listPermissions(opts: RequestOptions = {}): Promise<PermissionRequest[]> {
+    const res = await this.request<DataEnvelope<PermissionRequest[]>>("/api/permission/request", opts)
+    return res?.data ?? []
   }
 
-  listQuestions(opts: RequestOptions = {}) {
-    return this.request<QuestionRequest[]>("/question", opts)
+  async sessionPermissions(sessionID: string, opts: RequestOptions = {}): Promise<PermissionRequest[]> {
+    const res = await this.request<DataEnvelope<PermissionRequest[]>>(`/api/session/${sessionID}/permission`, opts)
+    return res?.data ?? []
   }
 
-  replyQuestion(requestID: string, answers: string[][], opts: RequestOptions = {}) {
-    return this.request<boolean>(`/question/${requestID}/reply`, { ...opts, method: "POST", body: { answers } })
+  replyPermission(sessionID: string, requestID: string, reply: PermissionReply, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/permission/${requestID}/reply`, {
+      ...opts,
+      method: "POST",
+      body: { reply },
+    })
   }
 
-  rejectQuestion(requestID: string, opts: RequestOptions = {}) {
-    return this.request<boolean>(`/question/${requestID}/reject`, { ...opts, method: "POST" })
+  async listForms(opts: RequestOptions = {}): Promise<FormInfo[]> {
+    const res = await this.request<DataEnvelope<FormInfo[]>>("/api/form", opts)
+    return res?.data ?? []
   }
 
-  /* ---------------------------------- SSE ----------------------------------- */
+  async sessionForms(sessionID: string, opts: RequestOptions = {}): Promise<FormDetail[]> {
+    const res = await this.request<DataEnvelope<FormDetail[]>>(`/api/session/${sessionID}/form`, opts)
+    return res?.data ?? []
+  }
 
-  /* ---------------------------------- streams -------------------------------- */
+  replyForm(sessionID: string, formID: string, answer: Record<string, unknown>, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/form/${formID}/reply`, {
+      ...opts,
+      method: "POST",
+      body: { answer },
+    })
+  }
+
+  /* --------------------------------- streams -------------------------------- */
 
   /**
-   * Read a server-sent event stream.
+   * Read the global server-sent event stream (`GET /api/event`).
    *
-   * Uses `fetch` rather than `EventSource` so that Basic auth headers can be
-   * sent. Resolves when the stream ends (abort or error).
+   * Uses `fetch` rather than `EventSource` so Basic auth headers can be sent.
+   * Each `data:` line carries the JSON event (`{ id, type, data, ... }`); the
+   * server also emits bare `: heartbeat` comments. Resolves when the stream ends.
    */
+  subscribe(onEvent: (event: ServerEvent) => void, opts: { signal?: AbortSignal; onOpen?: () => void } = {}): Promise<void> {
+    return this.stream("/api/event", {}, onEvent, opts)
+  }
+
   private async stream(
     path: string,
     query: Record<string, string | undefined>,
-    onData: (data: unknown) => void,
+    onData: (data: ServerEvent) => void,
     opts: { signal?: AbortSignal; onOpen?: () => void } = {},
   ): Promise<void> {
-    const res = await fetch(this.url(path, query), {
+    const res = await fetch(this.url(path, { query }), {
       headers: this.headers({ Accept: "text/event-stream" }),
       signal: opts.signal,
     })
@@ -317,6 +362,8 @@ export class ServerClient {
       while ((index = buffer.indexOf("\n\n")) !== -1) {
         const block = buffer.slice(0, index)
         buffer = buffer.slice(index + 2)
+        // A frame may span several `data:` lines; join them, ignoring the
+        // `event:`/`id:`/`: comment` lines the server also sends.
         const data = block
           .split("\n")
           .filter((line) => line.startsWith("data:"))
@@ -324,33 +371,14 @@ export class ServerClient {
           .join("\n")
         if (!data) continue
         try {
-          onData(JSON.parse(data))
+          const event = JSON.parse(data) as ServerEvent
+          if (event?.type) onData(event)
         } catch {
           /* ignore malformed frame */
         }
       }
     }
   }
-
-  /** Events for one project. */
-  subscribe(
-    onEvent: (event: ServerEvent) => void,
-    opts: { directory?: string; signal?: AbortSignal; onOpen?: () => void } = {},
-  ): Promise<void> {
-    return this.stream("/event", { directory: opts.directory }, (data) => onEvent(data as ServerEvent), opts)
-  }
-
-  /**
-   * Events for every project, one stream.
-   *
-   * Each frame carries the `directory` it came from alongside the event payload,
-   * which is what makes a cross-project status rollup possible without opening a
-   * stream per project.
-   */
-  subscribeGlobal(
-    onEvent: (envelope: GlobalEventEnvelope) => void,
-    opts: { signal?: AbortSignal; onOpen?: () => void } = {},
-  ): Promise<void> {
-    return this.stream("/global/event", {}, (data) => onEvent(data as GlobalEventEnvelope), opts)
-  }
 }
+
+export type { SessionID }

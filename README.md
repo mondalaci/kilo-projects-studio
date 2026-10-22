@@ -68,14 +68,16 @@ npm run app
 A Kilo/opencode server must be running for the app to connect:
 
 ```bash
-kilo serve --port 4096
-# or, without the Kilo wrapper:
-opencode serve --port 4096
+opencode serve --service --port 4097
 ```
 
-On first launch the app scans local ports and shows the instance picker. After
-that the last server is restored automatically. Discovery also probes the high
-port `27183` used by the reference project's PM2 setup.
+The app targets the opencode **v2** HTTP API (`/api/*`). That server always
+requires HTTP Basic authentication; the password lives in the server's
+`service.json` (its default username is `opencode`). On first launch the app scans
+local ports and shows the instance picker — `4097` first, then the legacy
+`4096` — asking for the password. After that the last server is restored
+automatically. Discovery also probes the high port `27183` used by the reference
+project's PM2 setup.
 
 Other scripts: `npm run dev` (Vite only, for UI work in a browser),
 `npm run typecheck`, `npm run preview`.
@@ -225,8 +227,8 @@ Two consequences of dropping the frame are handled explicitly:
 The tray is one icon summarising every project, so you can tell whether anything
 needs you without the window in front. It rolls up in two steps:
 
-1. **Conversation** — from `/session/status`, the global `/permission` and
-   `/question` lists, and the global event stream.
+1. **Conversation** — from the `session.*` events (`session.execution.*`,
+   `session.status`, `session.idle`) and the server's global pending lists.
 2. **Project** — the most actionable conversation wins:
    `blocked > retry/error > working > done (unacknowledged) > idle`.
 3. **Tray** — the same precedence across projects, plus the counts.
@@ -267,13 +269,13 @@ click first.
 
 ### How the state feed works
 
-One global event stream (`/global/event`) carries the events of *every* project,
-tagged with the directory they came from, so a single subscription keeps all the
-dots and the tray current — the active project additionally has its own
-per-directory stream for the conversation view. Because a stream only reports
-changes, a bounded poll supplies the baseline (a session that was already busy
-before the app connected) and repairs anything missed: a few projects' statuses
-per tick, and the two global request lists every fourth tick.
+One global event stream (`GET /api/event`) carries the events of *every* project,
+each tagged with its `location`, so a single subscription keeps all the dots and
+the tray current. A `BroadcastChannel` elects one leader tab to hold the stream
+and fan the events out, so several open tabs do not each open their own
+connection. Because a stream only reports changes, a bounded poll re-reads the
+server's global pending permission and form lists to repair anything missed
+while offline.
 
 ## Keyboard shortcuts
 
@@ -289,11 +291,10 @@ each badge names its own modifier, so a letter never appears next to the wrong o
 | `Alt`+`L` | Expand or collapse the current project's conversations |
 | `Alt`+`N` | New conversation |
 | `Alt`+`F` | Search conversations |
-| `Alt`+`T` | Expand or collapse the tools list, which hangs under its button in the conversation header |
 | `Alt`+`M` / `Alt`+`A` / `Alt`+`E` | Model / agent / effort |
 | `Alt`+`C` | Focus the composer |
 | `Alt`+`X` | Stop the current turn |
-| `Esc` | Close the open diff or the tools panel, or clear a sidebar filter (ending a Ctrl+P preview) |
+| `Esc` | Close the open diff or clear a sidebar filter (ending a Ctrl+P preview) |
 
 The two filters narrow their list as you type (subsequences work: `kwchat` finds
 `kilo-web-chat`), `↑`/`↓` move the selection, `Enter` opens it and `Esc` clears
@@ -368,6 +369,11 @@ log, because settings will not persist for that run.
   is needed.
 - The diff viewer renders text patches; binary changes are reported as such.
 - Requires `git` on `PATH` for the source-control panel.
+- The v2 API has no per-message tool toggles or session sharing, so the tools
+  list (and its `Alt`+`T` toggle) and the share button are gone; the source-control
+  panel still uses the desktop's own `git` rather than the server's `/api/vcs`.
+- Questions are surfaced as v2 **forms** (`/api/form`), and tool calls are streamed
+  from the `session.tool.*` events.
 - If `ELECTRON_RUN_AS_NODE` is set in the environment, Electron behaves as plain
   Node; `npm run app:dev` clears it for the child process, and the main process
   exits with an explanatory message if it is still set.

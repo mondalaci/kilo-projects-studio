@@ -21,7 +21,9 @@ const dragging = ref(false)
 const isImage = (mime: string) => mime.startsWith("image/")
 
 const attachmentsUnsupported = () =>
-  attachments.value.length > 0 && selectedModelInfo.value != null && !selectedModelInfo.value.capabilities?.attachment
+  attachments.value.length > 0 &&
+  selectedModelInfo.value != null &&
+  !(selectedModelInfo.value.capabilities?.input ?? []).some((kind) => kind === "image" || kind === "file")
 
 function resize() {
   const el = textarea.value

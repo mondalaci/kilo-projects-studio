@@ -1,4 +1,8 @@
-import type { TimeRange } from "@/api/types"
+/** A "created/updated" pair, matching both `Session.Info.time` and v1 ranges. */
+export interface TimeRange {
+  created: number
+  updated?: number
+}
 
 /** A sortable local calendar-day key (year*10000 + month*100 + day). */
 function calendarDay(timestamp: number): number {

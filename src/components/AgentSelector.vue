@@ -33,8 +33,8 @@ const selectedKey = computed<string>({
 })
 
 function displayValue(name: string) {
-  const agent = modes.value.find((item) => item.name === name)
-  return agent?.displayName ?? name
+  const agent = modes.value.find((item) => item.id === name)
+  return agent?.name ?? name
 }
 
 const filtered = computed(() => {
@@ -42,8 +42,8 @@ const filtered = computed(() => {
   if (!q) return modes.value
   return modes.value.filter(
     (agent) =>
-      agent.name.toLowerCase().includes(q) ||
-      (agent.displayName ?? "").toLowerCase().includes(q) ||
+      agent.id.toLowerCase().includes(q) ||
+      (agent.name ?? "").toLowerCase().includes(q) ||
       (agent.description ?? "").toLowerCase().includes(q),
   )
 })
@@ -117,13 +117,13 @@ watch(
           </ComboboxEmpty>
           <ComboboxItem
             v-for="agent in filtered"
-            :key="agent.name"
-            :value="agent.name"
-            :text-value="agent.displayName ?? agent.name"
+            :key="agent.id"
+            :value="agent.id"
+            :text-value="agent.name"
             class="kilo-agent-option"
-            :class="{ 'is-active': agent.name === selectedAgent }"
+            :class="{ 'is-active': agent.id === selectedAgent }"
           >
-            <span class="kilo-agent-name">{{ agent.displayName ?? agent.name }}</span>
+            <span class="kilo-agent-name">{{ agent.name }}</span>
             <span v-if="agent.description" class="kilo-agent-desc">{{ agent.description }}</span>
             <ComboboxItemIndicator class="kilo-agent-check"><Check :size="15" /></ComboboxItemIndicator>
           </ComboboxItem>

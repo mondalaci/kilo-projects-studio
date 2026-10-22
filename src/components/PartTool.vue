@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import { Check, ChevronRight, CircleAlert, Terminal } from "lucide-vue-next"
-import type { ToolPart } from "@/api/types"
+import type { AssistantToolBlock } from "@/api/types"
 import { prettyJson, toolSummary } from "@/utils/format"
+import { toolOutputText } from "@/utils/compose"
 import Spinner from "./Spinner.vue"
 
-const props = defineProps<{ part: ToolPart }>()
+const props = defineProps<{ block: AssistantToolBlock }>()
 const open = ref(false)
 
-const state = computed(() => props.part.state)
-const summary = computed(() => toolSummary(props.part.tool, state.value.input))
-const title = computed(() => ("title" in state.value && state.value.title) || summary.value || props.part.tool)
-const inputText = computed(() => JSON.stringify(state.value.input ?? {}, null, 2))
+const state = computed(() => props.block.state)
+const running = computed(() => state.value.status === "running" || state.value.status === "streaming")
+const input = computed<Record<string, unknown>>(() => (state.value.status === "streaming" ? {} : state.value.input))
+const summary = computed(() => toolSummary(props.block.name, input.value))
+const title = computed(() => summary.value || props.block.name)
+const inputText = computed(() =>
+  state.value.status === "streaming" ? state.value.input : JSON.stringify(state.value.input ?? {}, null, 2),
+)
 const output = computed(() => {
-  if (state.value.status === "completed") return state.value.output
-  if (state.value.status === "error") return state.value.error
+  if (state.value.status === "completed") return toolOutputText(props.block)
+  if (state.value.status === "error") return JSON.stringify(state.value.error, null, 2)
   return ""
 })
 const outputText = computed(() => prettyJson(output.value))
@@ -25,10 +30,10 @@ const outputText = computed(() => prettyJson(output.value))
     <button class="head" @click="open = !open">
       <ChevronRight :size="14" class="chev" :class="{ open }" />
       <Terminal :size="14" class="tool-icon" />
-      <span class="tool-name">{{ part.tool }}</span>
+      <span class="tool-name">{{ block.name }}</span>
       <span class="tool-title">{{ title }}</span>
       <span class="status">
-        <Spinner v-if="state.status === 'running' || state.status === 'pending'" :size="12" />
+        <Spinner v-if="running" :size="12" />
         <Check v-else-if="state.status === 'completed'" :size="14" class="ok" />
         <CircleAlert v-else :size="14" class="err" />
       </span>

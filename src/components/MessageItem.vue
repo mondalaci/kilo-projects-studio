@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { User } from "lucide-vue-next"
-import type { FilePart, MessageWithParts, Part, TextPart, ToolPart } from "@/api/types"
+import type { AssistantBlock, AssistantReasoningBlock, AssistantToolBlock, SessionMessage } from "@/api/types"
 import { formatCost, formatDateTime, formatTokens } from "@/utils/format"
 import { composedMessage } from "@/utils/compose"
 import { heldModifier } from "@/stores/shortcuts"
@@ -11,63 +11,76 @@ import PartMessageCompose from "./PartMessageCompose.vue"
 import PartReasoning from "./PartReasoning.vue"
 import PartTool from "./PartTool.vue"
 
-const props = defineProps<{ message: MessageWithParts; streaming?: boolean }>()
+const props = defineProps<{ message: SessionMessage; streaming?: boolean }>()
 
-const isUser = computed(() => props.message.info.role === "user")
+const isUser = computed(() => props.message.type === "user")
+const isAssistant = computed(() => props.message.type === "assistant")
 
-const contentParts = computed<Part[]>(() =>
-  props.message.parts.filter((part) => {
-    if (part.type === "text") {
-      const text = part as TextPart
-      if (text.synthetic || text.ignored || !text.text.trim()) return false
-    }
-    return true
-  }),
+const content = computed<AssistantBlock[]>(() => (props.message.type === "assistant" ? props.message.content : []))
+
+/** Bookkeeping messages with no user-facing content. */
+const hidden = computed(() =>
+  ["idle", "model-switched", "agent-switched", "location-switched"].includes(props.message.type),
 )
 
+/** Notes that are not part of the conversation flow (system, switches, idle). */
+const note = computed<string | null>(() => {
+  const message = props.message
+  if (message.type === "system" || message.type === "synthetic") return message.text
+  if (message.type === "skill") return `Skill: ${message.name}`
+  if (message.type === "shell") return `$ ${message.command}`
+  if (message.type === "compaction") return message.status === "running" ? "Compacting…" : `Compaction (${message.reason})`
+  return null
+})
+
 const errorMessage = computed(() => {
-  const info = props.message.info
-  if (info.role !== "assistant" || !info.error) return null
-  const error = info.error as { data?: { message?: string }; name?: string }
-  return error.data?.message ?? error.name ?? "The model returned an error."
+  if (props.message.type !== "assistant" || !props.message.error) return null
+  return props.message.error.message ?? "The model returned an error."
 })
 
 const meta = computed(() => {
-  const info = props.message.info
-  if (info.role !== "assistant") return null
-  const tokens = info.tokens
-  const total = tokens ? (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0) : 0
-  return {
-    model: info.modelID,
-    tokens: total,
-    cost: info.cost ?? 0,
-    created: info.time?.created,
-  }
+  if (props.message.type !== "assistant") return null
+  const message = props.message
+  const tokens = message.tokens
+  const total = tokens ? tokens.input + tokens.output + tokens.reasoning : 0
+  return { model: message.model.id, tokens: total, cost: message.cost ?? 0, created: message.time?.created }
 })
 
-function isCompose(part: Part): boolean {
-  return part.type === "tool" && composedMessage(part as ToolPart) !== null
+function isCompose(block: AssistantToolBlock): boolean {
+  return composedMessage(block) !== null
 }
 </script>
 
 <template>
-  <div class="message" :class="isUser ? 'user' : 'assistant'">
+  <template v-if="!hidden">
+    <div v-if="note" class="note">{{ note }}</div>
+
+    <div v-else class="message" :class="isUser ? 'user' : 'assistant'">
     <div v-if="!isUser" class="avatar" aria-hidden="true">K</div>
     <div class="bubble" :class="isUser ? 'user-bubble' : 'assistant-bubble'">
-      <template v-for="part in contentParts" :key="part.id">
-        <Markdown v-if="part.type === 'text' && !isUser" :text="(part as TextPart).text" :streaming="streaming" />
-        <p v-else-if="part.type === 'text' && isUser" class="user-text">{{ (part as TextPart).text }}</p>
-
-        <PartReasoning v-else-if="part.type === 'reasoning' && !isUser" :part="part" />
-        <template v-else-if="part.type === 'tool' && !isUser">
-          <PartMessageCompose v-if="isCompose(part)" :part="part" />
-          <PartTool v-else :part="part" />
-        </template>
-
-        <PartFile v-else-if="part.type === 'file'" :part="part as FilePart" />
+      <template v-if="isUser">
+        <p v-if="message.type === 'user' && message.text" class="user-text">{{ message.text }}</p>
+        <PartFile
+          v-for="(file, index) in (message.type === 'user' ? message.files : undefined) ?? []"
+          :key="index"
+          :data="file.data"
+          :mime="file.mime"
+          :filename="file.name"
+        />
       </template>
 
-      <div v-if="streaming && !isUser" class="caret"></div>
+      <template v-else-if="isAssistant">
+        <template v-for="(part, index) in content" :key="index">
+          <Markdown v-if="part.type === 'text'" :text="part.text" :streaming="streaming" />
+          <PartReasoning v-else-if="part.type === 'reasoning'" :block="part as AssistantReasoningBlock" />
+          <template v-else-if="part.type === 'tool'">
+            <PartMessageCompose v-if="isCompose(part)" :block="part" />
+            <PartTool v-else :block="part" />
+          </template>
+        </template>
+      </template>
+
+      <div v-if="streaming" class="caret"></div>
 
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     </div>
@@ -80,10 +93,21 @@ function isCompose(part: Part): boolean {
         <div v-if="meta.cost" class="meta-row">{{ formatCost(meta.cost) }}</div>
       </div>
     </div>
-  </div>
+    </div>
+  </template>
 </template>
 
 <style scoped>
+.note {
+  max-width: var(--content-width);
+  margin: 6px auto;
+  width: 100%;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .message {
   position: relative;
   display: flex;
@@ -157,8 +181,6 @@ function isCompose(part: Part): boolean {
   color: var(--danger);
   font-size: 13px;
 }
-/* Full-height gutter; the inner block sticks below the header while the
-   message is in view (native sticky, so it never jitters on scroll). */
 .meta {
   position: absolute;
   top: 0;
@@ -189,7 +211,6 @@ function isCompose(part: Part): boolean {
 .meta-datetime {
   font-variant-numeric: tabular-nums;
 }
-/* On narrower screens there is no side gutter, so overlay the info on hover. */
 @media (max-width: 1360px) {
   .meta {
     top: 6px;

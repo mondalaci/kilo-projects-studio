@@ -1,6 +1,6 @@
 import { ref } from "vue"
 import type { ServerClient } from "@/api/client"
-import type { BaseEvent, ServerEvent } from "@/api/types"
+import type { ServerEvent } from "@/api/types"
 import { useChat } from "./chat"
 import { useProjects } from "./projects"
 import { useSessions } from "./sessions"
@@ -14,20 +14,15 @@ const sessions = useSessions()
 const projects = useProjects()
 
 /**
- * Every tab shares a single `/event` stream per (server, project).
- *
- * Browsers cap HTTP/1.1 at six connections per origin, and one server-sent
- * event stream per tab is enough to exhaust that pool once a handful of tabs
- * are open. After that every other request — health probes included — queues
- * forever and the app looks dead. So instead of each tab holding its own
- * stream, a BroadcastChannel elects one leader per (server, project) to hold
- * the stream and fan the events out to the other tabs.
+ * The v2 server exposes a single global event stream (`GET /api/event`) carrying
+ * every project's events, each tagged with its `location`. A BroadcastChannel
+ * elects one leader per server to hold that stream and fan the events out to the
+ * other tabs, so a handful of open tabs does not exhaust the per-origin
+ * connection pool with one stream each.
  */
-const CHANNEL_NAME = "kilo-projects-studio.events"
+const CHANNEL_NAME = "kilo-projects-studio.events.v2"
 const PING_MS = 2000
 const LEADER_TIMEOUT_MS = PING_MS * 3
-/** Grace period a joining tab waits for the current leader to answer before
- *  claiming leadership itself. */
 const ELECT_GRACE_MS = 400
 
 const supported = typeof BroadcastChannel !== "undefined"
@@ -46,79 +41,84 @@ let listenerAttached = false
 let unloadHooked = false
 let activeClient: ServerClient | null = null
 let activeKey = ""
-let activeDirectory: string | undefined
 let role: "idle" | "leader" | "follower" = "idle"
 let controller: AbortController | null = null
 let pingTimer: ReturnType<typeof setInterval> | null = null
 let watchdog: ReturnType<typeof setInterval> | null = null
 let electTimer: ReturnType<typeof setTimeout> | null = null
 let lastPingAt = 0
+let reconcileTimer: ReturnType<typeof setTimeout> | null = null
 
 function sleep(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms)
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer)
-      resolve()
-    }, { once: true })
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      { once: true },
+    )
   })
 }
 
-function keyFor(client: ServerClient, directory?: string) {
-  return `${client.origin}\u0000${directory ?? ""}`
+function keyFor(client: ServerClient) {
+  return client.origin
 }
 
 function post(msg: Msg) {
   channel?.postMessage(msg)
 }
 
-function normalize(event: ServerEvent): { id?: string; type: string; properties?: Record<string, unknown> } | null {
-  if ((event as { type?: string }).type === "sync") {
-    const sync = (event as { syncEvent: { id: string; type: string; data: Record<string, unknown> } }).syncEvent
-    if (!sync) return null
-    return { id: sync.id, type: sync.type.replace(/\.1$/, ""), properties: sync.data }
-  }
-  const base = event as BaseEvent
-  if (!base?.type) return null
-  return { id: base.id, type: base.type.replace(/\.1$/, ""), properties: base.properties }
-}
-
 function apply(event: ServerEvent) {
-  const normalized = normalize(event)
-  if (!normalized) return
-  if (normalized.id) {
-    if (seen.has(normalized.id)) return
-    seen.add(normalized.id)
+  if (!event?.type) return
+  if (event.id) {
+    if (seen.has(event.id)) return
+    seen.add(event.id)
     if (seen.size > 4000) {
-      // Bound memory; keeping the newest half is enough for dedupe.
       const keep = [...seen].slice(-2000)
       seen.clear()
       for (const id of keep) seen.add(id)
     }
   }
   lastEventAt.value = Date.now()
-  sessions.applyEvent(normalized.type, normalized.properties)
-  projects.applyEvent(normalized.type, normalized.properties)
-  chat.applyEvent(normalized.type, normalized.properties)
+  const data = event.data
+  sessions.applyEvent(event.type, data)
+  projects.applyEvent(event.type, data)
+  chat.applyEvent(event.type, data)
+
+  // A turn ending is the point the server has persisted the final messages, so
+  // re-read them: streaming is best-effort and the persisted copy is canonical.
+  if (
+    activeClient &&
+    (event.type === "session.execution.succeeded" ||
+      event.type === "session.execution.failed" ||
+      event.type === "session.idle")
+  ) {
+    scheduleReconcile()
+  }
 }
 
-async function resync(client: ServerClient, directory?: string) {
+/** Debounced reconcile, so a burst of end events refetches once. */
+function scheduleReconcile() {
+  if (reconcileTimer) clearTimeout(reconcileTimer)
+  reconcileTimer = setTimeout(() => {
+    reconcileTimer = null
+    if (activeClient) void chat.reconcile(activeClient)
+  }, 400)
+}
+
+async function resync(client: ServerClient) {
   try {
-    await sessions.load(client, directory)
+    await sessions.load(client)
   } catch {
     /* ignore */
   }
-  const currentID = sessions.currentID.value
-  if (currentID) {
-    try {
-      await chat.open(client, currentID, directory)
-    } catch {
-      /* ignore */
-    }
-  }
+  await chat.reconcile(client)
 }
 
-/** SSE event handler for the leader: apply locally, then fan out to followers. */
+/** SSE handler for the leader: apply locally, then fan out to followers. */
 function onStreamEvent(event: ServerEvent) {
   apply(event)
   post({ t: "event", key: activeKey, event })
@@ -136,19 +136,15 @@ function openStream() {
     let first = true
     while (!signal.aborted) {
       try {
-        await client.subscribe(
-          onStreamEvent,
-          {
-            directory: activeDirectory,
-            signal,
-            onOpen: () => {
-              live.value = true
-              connecting.value = false
-              void resync(client, activeDirectory)
-              post({ t: "resync", key: activeKey })
-            },
+        await client.subscribe(onStreamEvent, {
+          signal,
+          onOpen: () => {
+            live.value = true
+            connecting.value = false
+            void resync(client)
+            post({ t: "resync", key: activeKey })
           },
-        )
+        })
       } catch {
         /* connection dropped */
       }
@@ -168,7 +164,6 @@ function closeStream() {
 
 function startPings() {
   stopPings()
-  // Ping immediately so tabs joining at the same moment settle quickly.
   post({ t: "ping", key: activeKey, id: tabID })
   pingTimer = setInterval(() => post({ t: "ping", key: activeKey, id: tabID }), PING_MS)
 }
@@ -191,11 +186,6 @@ function becomeFollower() {
   closeStream()
 }
 
-/**
- * Ask for the current leader; if none answers within the grace period, claim
- * leadership. Two claimers that start together are reconciled by id in
- * `onMessage` (the smaller id wins), so the overlap is brief.
- */
 function elect() {
   if (!supported) {
     becomeLeader()
@@ -226,7 +216,6 @@ function onMessage(event: MessageEvent<Msg>) {
       break
     case "ping":
       if (role === "leader") {
-        // Another leader is alive; the smaller id wins deterministically.
         if (msg.id < tabID) becomeFollower()
         break
       }
@@ -235,11 +224,10 @@ function onMessage(event: MessageEvent<Msg>) {
       connecting.value = false
       break
     case "hello":
-      // Answer a joiner so it does not claim leadership unnecessarily.
       if (role === "leader") post({ t: "ping", key: activeKey, id: tabID })
       break
     case "resync":
-      if (role === "follower" && activeClient) void resync(activeClient, activeDirectory)
+      if (role === "follower" && activeClient) void resync(activeClient)
       break
     case "vacate":
       if (role === "follower") {
@@ -256,6 +244,10 @@ function stop() {
     clearTimeout(electTimer)
     electTimer = null
   }
+  if (reconcileTimer) {
+    clearTimeout(reconcileTimer)
+    reconcileTimer = null
+  }
   stopPings()
   if (watchdog) {
     clearInterval(watchdog)
@@ -270,14 +262,12 @@ function stop() {
 }
 
 export function useLive() {
-  function start(client: ServerClient, directory?: string) {
+  function start(client: ServerClient) {
     stop()
     activeClient = client
-    activeDirectory = directory
-    activeKey = keyFor(client, directory)
+    activeKey = keyFor(client)
 
     if (!supported) {
-      // No cross-tab channel available: fall back to a per-tab stream.
       becomeLeader()
       return
     }
@@ -288,7 +278,6 @@ export function useLive() {
       listenerAttached = true
     }
     if (!unloadHooked && typeof window !== "undefined") {
-      // Let the others take over promptly when this tab closes.
       window.addEventListener("beforeunload", () => {
         if (role === "leader") post({ t: "vacate", key: activeKey, id: tabID })
       })

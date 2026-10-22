@@ -1,96 +1,138 @@
 <script setup lang="ts">
 import { reactive } from "vue"
-import { HelpCircle, ShieldAlert, X } from "lucide-vue-next"
-import type { PermissionRequest, QuestionRequest } from "@/api/types"
+import { HelpCircle, ShieldAlert } from "lucide-vue-next"
+import type { FormDetail, FormField } from "@/api/types"
 import { useApp } from "@/stores/app"
 
 const app = useApp()
-const { pendingPermissions, pendingQuestions } = app.chat
-const { replyPermission, replyQuestion, rejectQuestion } = app
+const { pendingPermissions, pendingForms } = app.chat
+const { replyPermission, replyForm } = app
 
-const selections = reactive<Record<string, string[][]>>({})
-const customs = reactive<Record<string, string>>({})
+/** Form answers, keyed `${formID}:${fieldKey}` then normalised on submit. */
+const answers = reactive<Record<string, unknown>>({})
 
-function selection(requestID: string, index: number): string[] {
-  if (!selections[requestID]) selections[requestID] = []
-  if (!selections[requestID][index]) selections[requestID][index] = []
-  return selections[requestID][index]
+function fieldValue(formID: string, field: FormField): unknown {
+  const key = `${formID}:${field.key}`
+  if (key in answers) return answers[key]
+  return field.default ?? (field.type === "multiselect" ? [] : field.type === "boolean" ? false : "")
 }
 
-function pick(request: QuestionRequest, index: number, label: string, multiple?: boolean) {
-  const current = selection(request.id, index)
-  if (multiple) {
-    const pos = current.indexOf(label)
-    if (pos === -1) current.push(label)
-    else current.splice(pos, 1)
-  } else {
-    selections[request.id][index] = [label]
+function setField(formID: string, field: FormField, value: unknown) {
+  answers[`${formID}:${field.key}`] = value
+}
+
+function toggleMulti(formID: string, field: FormField, value: string) {
+  const key = `${formID}:${field.key}`
+  const current = Array.isArray(answers[key]) ? (answers[key] as string[]) : []
+  const pos = current.indexOf(value)
+  answers[key] = pos === -1 ? [...current, value] : current.filter((item) => item !== value)
+}
+
+function multiplePicked(formID: string, field: FormField, value: string): boolean {
+  const current = answers[`${formID}:${field.key}`]
+  return Array.isArray(current) && (current as string[]).includes(value)
+}
+
+function visibleFields(form: FormDetail): FormField[] {
+  return form.fields.filter((field) => !field.hidden)
+}
+
+function submit(form: FormDetail) {
+  const answer: Record<string, unknown> = {}
+  for (const field of visibleFields(form)) {
+    const value = fieldValue(form.id, field)
+    if (field.type === "multiselect") {
+      answer[field.key] = Array.isArray(value) ? value : []
+    } else if (field.type === "boolean") {
+      answer[field.key] = value === true
+    } else if (field.type === "number" || field.type === "integer") {
+      answer[field.key] = typeof value === "string" ? Number(value) : value
+    } else {
+      answer[field.key] = value
+    }
   }
-}
-
-function isPicked(request: QuestionRequest, index: number, label: string) {
-  return selection(request.id, index).includes(label)
-}
-
-function submit(request: QuestionRequest) {
-  const answers = request.questions.map((_, index) => {
-    const picked = [...(selections[request.id]?.[index] ?? [])]
-    const custom = customs[`${request.id}:${index}`]?.trim()
-    if (custom) picked.push(custom)
-    return picked
-  })
-  void replyQuestion(request.id, answers)
+  void replyForm(form.sessionID, form.id, answer)
 }
 </script>
 
 <template>
-  <div v-if="pendingPermissions.length || pendingQuestions.length" class="dock">
+  <div v-if="pendingPermissions.length || pendingForms.length" class="dock">
     <div v-for="request in pendingPermissions" :key="request.id" class="card permission">
       <div class="card-head">
         <ShieldAlert :size="16" class="icon-warn" />
         <span>Permission required</span>
-        <span class="perm-name">{{ request.permission }}</span>
+        <span class="perm-name">{{ request.action }}</span>
       </div>
-      <div v-if="request.patterns?.length" class="patterns">
-        <code v-for="pattern in request.patterns" :key="pattern">{{ pattern }}</code>
+      <div v-if="request.resources?.length" class="patterns">
+        <code v-for="resource in request.resources" :key="resource">{{ resource }}</code>
       </div>
       <div class="actions">
-        <button class="primary" @click="replyPermission(request.id, 'once')">Allow once</button>
-        <button @click="replyPermission(request.id, 'always')">Always allow</button>
-        <button class="danger" @click="replyPermission(request.id, 'reject')">Deny</button>
+        <button class="primary" @click="replyPermission(request.sessionID, request.id, 'once')">Allow once</button>
+        <button @click="replyPermission(request.sessionID, request.id, 'always')">Always allow</button>
+        <button class="danger" @click="replyPermission(request.sessionID, request.id, 'reject')">Deny</button>
       </div>
     </div>
 
-    <div v-for="request in pendingQuestions" :key="request.id" class="card question">
+    <div v-for="form in pendingForms" :key="form.id" class="card question">
       <div class="card-head">
         <HelpCircle :size="16" class="icon-accent" />
-        <span>{{ request.questions[0]?.header ?? "Question" }}</span>
-        <button class="close" title="Reject" @click="rejectQuestion(request.id)"><X :size="15" /></button>
+        <span>{{ form.title || "Question" }}</span>
       </div>
-      <div v-for="(question, index) in request.questions" :key="index" class="question-block">
-        <p class="question-text">{{ question.question }}</p>
-        <div class="options">
+      <div v-for="field in visibleFields(form)" :key="field.key" class="question-block">
+        <p class="question-text">{{ field.title || field.key }}</p>
+        <p v-if="field.description" class="question-desc">{{ field.description }}</p>
+
+        <select
+          v-if="field.options?.length && field.type !== 'multiselect'"
+          class="input"
+          :value="fieldValue(form.id, field)"
+          @change="setField(form.id, field, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="" disabled>Choose…</option>
+          <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+
+        <div v-else-if="field.type === 'multiselect'" class="options">
           <button
-            v-for="option in question.options"
-            :key="option.label"
+            v-for="option in field.options"
+            :key="option.value"
             class="option"
-            :class="{ picked: isPicked(request, index, option.label) }"
-            @click="pick(request, index, option.label, question.multiple)"
+            :class="{ picked: multiplePicked(form.id, field, option.value) }"
+            @click="toggleMulti(form.id, field, option.value)"
           >
             <span class="option-label">{{ option.label }}</span>
             <span v-if="option.description" class="option-desc">{{ option.description }}</span>
           </button>
         </div>
+
+        <label v-else-if="field.type === 'boolean'" class="checkbox">
+          <input
+            type="checkbox"
+            :checked="fieldValue(form.id, field) === true"
+            @change="setField(form.id, field, ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ field.title || field.key }}</span>
+        </label>
+
         <input
-          v-if="question.custom"
-          v-model="customs[`${request.id}:${index}`]"
-          class="custom"
-          placeholder="Or type your own answer…"
-          @keydown.enter.prevent="submit(request)"
+          v-else-if="field.type === 'number' || field.type === 'integer'"
+          class="input"
+          type="number"
+          :value="fieldValue(form.id, field)"
+          @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
+        />
+
+        <input
+          v-else
+          class="input"
+          :value="fieldValue(form.id, field)"
+          placeholder="Type your answer…"
+          @input="setField(form.id, field, ($event.target as HTMLInputElement).value)"
+          @keydown.enter.prevent="submit(form)"
         />
       </div>
       <div class="actions">
-        <button class="primary" @click="submit(request)">Submit</button>
+        <button class="primary" @click="submit(form)">Submit</button>
       </div>
     </div>
   </div>
@@ -122,9 +164,7 @@ function submit(request: QuestionRequest) {
   font-weight: 600;
   margin-bottom: 8px;
 }
-.icon-warn {
-  color: var(--accent);
-}
+.icon-warn,
 .icon-accent {
   color: var(--accent);
 }
@@ -133,17 +173,6 @@ function submit(request: QuestionRequest) {
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 400;
-}
-.close {
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  display: inline-flex;
-  padding: 2px;
-}
-.close:hover {
-  color: var(--text);
 }
 .patterns {
   display: flex;
@@ -192,8 +221,13 @@ function submit(request: QuestionRequest) {
   margin-bottom: 12px;
 }
 .question-text {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   font-size: 13.5px;
+}
+.question-desc {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .options {
   display: flex;
@@ -225,16 +259,22 @@ function submit(request: QuestionRequest) {
   font-size: 11.5px;
   color: var(--text-muted);
 }
-.custom {
-  margin-top: 8px;
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.input {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   outline: none;
+  color: var(--text);
 }
-.custom:focus {
+.input:focus {
   border-color: var(--accent);
 }
 </style>

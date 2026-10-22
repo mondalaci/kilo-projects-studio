@@ -1,4 +1,4 @@
-import type { ToolPart } from "@/api/types"
+import type { AssistantToolBlock } from "@/api/types"
 
 export interface ComposeVariant {
   label?: string
@@ -44,18 +44,28 @@ function normalize(value: unknown): ComposedMessage | null {
   }
 }
 
+/** The combined text of a tool block's completed output. */
+export function toolOutputText(block: AssistantToolBlock): string {
+  if (block.state.status === "completed" || block.state.status === "error") {
+    return (block.state.content ?? [])
+      .filter((item): item is { type: "text"; text: string } => item.type === "text")
+      .map((item) => item.text)
+      .join("")
+  }
+  return ""
+}
+
 /**
- * Extract the composed message(s) from a `message_compose_v1` tool part.
+ * Extract the composed message(s) from a `message_compose_v1` tool block.
  *
  * The tool input carries the subject/label and the output carries the finalized
- * body, so the two are merged variant by variant. Returns null when the part is
+ * body, so the two are merged variant by variant. Returns null when the block is
  * not a composed message, letting the caller fall back to the generic tool view.
  */
-export function composedMessage(part: ToolPart): ComposedMessage | null {
-  const { state } = part
-  if (!part.tool.startsWith("message_compose")) return null
-  const input = normalize(state.input)
-  const output = state.status === "completed" ? normalize(parseJson(state.output)) : null
+export function composedMessage(block: AssistantToolBlock): ComposedMessage | null {
+  if (!block.name.startsWith("message_compose")) return null
+  const input = block.state.status === "streaming" ? null : normalize(block.state.input)
+  const output = block.state.status === "completed" ? normalize(parseJson(toolOutputText(block))) : null
   const source = input ?? output
   if (!source) return null
   const variants = source.variants.map((variant, index) => ({

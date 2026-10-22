@@ -10,7 +10,7 @@ const app = useApp()
 const { instances, scanning, connecting, connectError, credentialsFor, scan } = app.connection
 
 const origin = ref("")
-const username = ref("kilo")
+const username = ref("opencode")
 const password = ref("")
 const showManual = ref(false)
 const busyOrigin = ref<string | null>(null)
@@ -44,11 +44,11 @@ async function manualConnect() {
   localError.value = null
   const normalized = normalizeOrigin(origin.value)
   if (!normalized) {
-    localError.value = "Enter a valid address, e.g. 127.0.0.1:4096"
+    localError.value = "Enter a valid address, e.g. 127.0.0.1:4097"
     return
   }
   const creds = password.value
-    ? { username: username.value || "kilo", password: password.value }
+    ? { username: username.value || "opencode", password: password.value }
     : credentialsFor(normalized)
   busyOrigin.value = normalized
   const info: InstanceInfo = {
@@ -128,12 +128,12 @@ async function manualConnect() {
       <form v-if="showManual" class="manual" @submit.prevent="manualConnect">
         <label>
           Address
-          <input v-model="origin" placeholder="127.0.0.1:4096" autocomplete="off" spellcheck="false" />
+          <input v-model="origin" placeholder="127.0.0.1:4097" autocomplete="off" spellcheck="false" />
         </label>
         <div class="row">
           <label>
             Username
-            <input v-model="username" placeholder="kilo" autocomplete="username" />
+            <input v-model="username" placeholder="opencode" autocomplete="username" />
           </label>
           <label>
             Password
