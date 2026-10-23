@@ -146,6 +146,10 @@ function isCompose(block: AssistantToolBlock): boolean {
   /* The gutter an avatar needs: its own width plus the flex gap. Both rows
      reserve one, so the avatars hang outside the same content width. */
   --avatar-gutter: calc(28px + 12px);
+  /* How far the avatar sits below the message's top edge. A block that opens an
+     assistant message takes the same offset, so its top border lines up with the
+     avatar instead of hanging below it. */
+  --avatar-top: 2px;
 }
 .message.user {
   justify-content: flex-end;
@@ -164,7 +168,7 @@ function isCompose(block: AssistantToolBlock): boolean {
   place-items: center;
   background: var(--avatar-tile);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--avatar-top);
 }
 .robot {
   display: block;
@@ -188,6 +192,12 @@ function isCompose(block: AssistantToolBlock): boolean {
      the assistant's content and the user's share one width and both avatars
      protrude past it. */
   margin-right: var(--avatar-gutter);
+}
+/* A bordered block that opens a message is level with the avatar beside it: both
+   are boxes, so their top edges meet. Text is left alone — its line box already
+   starts at the message's top, and the avatar is set to sit just below it. */
+.assistant-bubble > :first-child:not(.markdown) {
+  margin-top: var(--avatar-top);
 }
 .user-bubble {
   background: var(--bubble-user);

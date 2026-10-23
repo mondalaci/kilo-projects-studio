@@ -38,10 +38,13 @@ watch(
 .reasoning {
   margin: 6px 0;
   border-left: 2px solid var(--border);
-  padding-left: 10px;
+  /* The space above the body is padding, not the body's own margin: a child's top
+     margin collapses out of this box, which left the accent bar starting below the
+     block's top edge and pushed the whole box out of line with the avatar. */
+  padding: 6px 0 0 10px;
 }
 .body {
-  margin-top: 6px;
+  margin-top: 0;
   color: var(--text-muted);
   font-size: 13px;
   white-space: pre-wrap;
