@@ -310,6 +310,8 @@ function parts(path: string) {
   background: var(--bg-active);
   border-radius: 999px;
   padding: 1px 7px;
+  /* Like .unpushed-pill: the header is a drag region, which receives no hover. */
+  -webkit-app-region: no-drag;
 }
 .head-spacer {
   flex: 1;
@@ -327,6 +329,8 @@ function parts(path: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Like .unpushed-pill: the header is a drag region, which receives no hover. */
+  -webkit-app-region: no-drag;
 }
 /* Unpushed commits, beside the branch they belong to. Accent-tinted so it reads
    as "something to do" rather than as another piece of branch metadata. */
