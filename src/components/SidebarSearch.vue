@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { Search, X } from "lucide-vue-next"
-import { searchContent, searchHealth, listAllSessions } from "@/api/search"
+import { searchContent, searchHealth, listAllSessions, listSessionsPage } from "@/api/search"
 import { useApp } from "@/stores/app"
 import { closeSearch } from "@/stores/search"
 import { relativeTime } from "@/utils/format"
@@ -45,6 +45,15 @@ function titleHits(list: Awaited<ReturnType<typeof app.sessions.query>>): Hit[] 
   }))
 }
 
+/** How many conversations the service holds for the current project. */
+async function scopedTotal(): Promise<number | null> {
+  try {
+    return (await listSessionsPage(0, 1, 5000, directory.value)).total
+  } catch {
+    return null
+  }
+}
+
 async function run(raw: string) {
   const active = client.value
   const search = raw.trim()
@@ -57,7 +66,7 @@ async function run(raw: string) {
     } else {
       let done = false
       try {
-        const results = await searchContent(search, 30)
+        const results = await searchContent(search, 30, directory.value)
         if (seq !== requestSeq) return
         hits.value = results.map((hit) => ({
           id: hit.sessionID,
@@ -98,7 +107,7 @@ async function showAll() {
   try {
     let list: Hit[] = []
     try {
-      const page = await listAllSessions()
+      const page = await listAllSessions(2000, directory.value)
       list = page.results.map((hit) => ({
         id: hit.sessionID,
         title: hit.title || "Untitled",
@@ -127,10 +136,10 @@ watch(query, (value) => {
 onMounted(() => {
   inputEl.value?.focus()
   window.addEventListener("keydown", onWindowKeydown)
-  void searchHealth().then((health) => {
+  void searchHealth().then(async (health) => {
     if (health) {
       mode.value = "content"
-      total.value = health.sessions
+      total.value = await scopedTotal()
     } else {
       mode.value = "fallback"
     }

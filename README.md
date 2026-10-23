@@ -107,7 +107,8 @@ Conversation search (`Alt`+`F`) uses the shared **opencode-search** service
 (a small Bun FTS5/BM25 index over message text, listening on `127.0.0.1:27184`)
 when it is running, and falls back to the server's own title search when it is
 not. The sidebar header shows which one answered ("Content search" or
-"Fallback · titles").
+"Fallback · titles"). Results are scoped to the current project's directory,
+matching the sidebar.
 
 The service lives in its own repository (`../opencode-search`) and is shared with
 `kilo-web-chat`: one process indexes several databases ("sources") and tags every
