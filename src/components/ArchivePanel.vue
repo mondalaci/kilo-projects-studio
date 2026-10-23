@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
-import { Archive, ArchiveRestore, Folder, X } from "lucide-vue-next"
+import { Archive, ArchiveRestore, Folder, Trash2, X } from "lucide-vue-next"
 import Spinner from "./Spinner.vue"
 import type { SessionInfo } from "@/api/types"
 import { useApp } from "@/stores/app"
@@ -12,6 +12,8 @@ const { archived, groups, loading, error } = app.archive
 const query = ref("")
 const inputEl = ref<HTMLInputElement | null>(null)
 const restoring = ref<Set<string>>(new Set())
+const deleting = ref<Set<string>>(new Set())
+const confirming = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 
 const filteredGroups = computed(() => {
@@ -47,6 +49,23 @@ function isRestoring(sessionID: string) {
   return restoring.value.has(sessionID)
 }
 
+function isDeleting(sessionID: string) {
+  return deleting.value.has(sessionID)
+}
+
+function isConfirming(sessionID: string) {
+  return confirming.value === sessionID
+}
+
+function isActive(sessionID: string) {
+  return app.sessions.currentID.value === sessionID
+}
+
+function view(session: SessionInfo) {
+  if (isConfirming(session.id)) return
+  void app.viewArchivedSession(session)
+}
+
 async function restore(session: SessionInfo) {
   if (isRestoring(session.id)) return
   actionError.value = null
@@ -62,9 +81,38 @@ async function restore(session: SessionInfo) {
   }
 }
 
+function askDelete(sessionID: string) {
+  actionError.value = null
+  confirming.value = sessionID
+}
+
+function cancelDelete() {
+  confirming.value = null
+}
+
+async function remove(session: SessionInfo) {
+  if (isDeleting(session.id)) return
+  actionError.value = null
+  deleting.value = new Set(deleting.value).add(session.id)
+  try {
+    await app.deleteSession(session.id, session.location?.directory)
+    confirming.value = null
+  } catch (cause) {
+    actionError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    const next = new Set(deleting.value)
+    next.delete(session.id)
+    deleting.value = next
+  }
+}
+
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return
   event.preventDefault()
+  if (confirming.value) {
+    cancelDelete()
+    return
+  }
   app.closeArchive()
 }
 
@@ -108,18 +156,45 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
             <span class="group-name">{{ projectName(group.directory) }}</span>
             <span class="group-count">{{ group.sessions.length }}</span>
           </div>
-          <div v-for="session in group.sessions" :key="session.id" class="row">
-            <span class="title" :title="session.title || 'Untitled'">{{ session.title || "Untitled" }}</span>
-            <span class="time">{{ archivedLabel(session) }}</span>
-            <button
-              class="restore"
-              :title="isRestoring(session.id) ? 'Restoring…' : 'Restore conversation'"
-              :disabled="isRestoring(session.id)"
-              @click="restore(session)"
-            >
-              <Spinner v-if="isRestoring(session.id)" :size="12" />
-              <ArchiveRestore v-else :size="14" />
-            </button>
+          <div
+            v-for="session in group.sessions"
+            :key="session.id"
+            class="row"
+            :class="{ confirming: isConfirming(session.id), active: isActive(session.id) }"
+            role="button"
+            tabindex="0"
+            @click="view(session)"
+            @keydown.enter.prevent="view(session)"
+          >
+            <template v-if="isConfirming(session.id)">
+              <span class="confirm-text">Delete permanently?</span>
+              <button class="confirm-cancel" @click.stop="cancelDelete()">Cancel</button>
+              <button
+                class="confirm-delete"
+                :disabled="isDeleting(session.id)"
+                :title="isDeleting(session.id) ? 'Deleting…' : 'Delete permanently'"
+                @click.stop="remove(session)"
+              >
+                <Spinner v-if="isDeleting(session.id)" :size="12" />
+                <template v-else>Delete</template>
+              </button>
+            </template>
+            <template v-else>
+              <span class="title" :title="session.title || 'Untitled'">{{ session.title || "Untitled" }}</span>
+              <span class="time">{{ archivedLabel(session) }}</span>
+              <button
+                class="restore"
+                :title="isRestoring(session.id) ? 'Restoring…' : 'Restore conversation'"
+                :disabled="isRestoring(session.id)"
+                @click.stop="restore(session)"
+              >
+                <Spinner v-if="isRestoring(session.id)" :size="12" />
+                <ArchiveRestore v-else :size="14" />
+              </button>
+              <button class="delete" title="Delete conversation" @click.stop="askDelete(session.id)">
+                <Trash2 :size="14" />
+              </button>
+            </template>
           </div>
         </section>
 
@@ -162,7 +237,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
 }
 .close,
 .clear,
-.restore {
+.restore,
+.delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -177,14 +253,19 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
 }
 .close:hover,
 .clear:hover,
-.restore:hover:not(:disabled) {
+.restore:hover:not(:disabled),
+.delete:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
 }
 .restore:hover:not(:disabled) {
   color: var(--accent);
 }
-.restore:disabled {
+.delete:hover:not(:disabled) {
+  color: var(--git-deleted);
+}
+.restore:disabled,
+.delete:disabled {
   opacity: 0.6;
 }
 .clear {
@@ -257,9 +338,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
   gap: 8px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 .row:hover {
   background: var(--bg-hover);
+}
+.row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.row.active {
+  background: var(--bg-active);
+}
+.row.active .title {
+  color: var(--text);
 }
 .title {
   flex: 1;
@@ -276,9 +368,51 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown))
   color: var(--text-faint);
   white-space: nowrap;
 }
-.restore {
+.restore,
+.delete {
   flex: none;
   padding: 3px;
+}
+.row.confirming {
+  background: var(--bg-hover);
+}
+.confirm-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--git-deleted);
+}
+.confirm-cancel,
+.confirm-delete {
+  flex: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  padding: 3px 8px;
+}
+.confirm-cancel {
+  background: transparent;
+  color: var(--text-muted);
+}
+.confirm-cancel:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.confirm-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--git-deleted);
+  color: #fff;
+}
+.confirm-delete:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.confirm-delete:disabled {
+  opacity: 0.7;
 }
 .note,
 .empty,

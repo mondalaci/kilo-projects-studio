@@ -16,8 +16,9 @@ conversations:
   newest conversation of the busiest project is what opens on launch. The
   chevron on a project row expands it to list that project's conversations
   (newest first); `Alt`+`L` toggles the current project's row. The header's
-  archive button opens the archived conversations page, grouped by project,
-  where they can be restored.
+  archive button opens the archived conversations page, grouped by project.
+  Clicking one opens it in the conversation pane, read-only, so it can be
+  reviewed before being restored or permanently deleted.
 - **Diff panel** — a permanent right-hand panel listing the uncommitted changes of
   the active project's repository as a flat list of file paths, with the count
   beside the title and the staged ones under their own heading. It re-scans the
@@ -137,7 +138,7 @@ scripts/
 src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
   api/desktop.ts     Typed access to the preload bridge
   stores/projects.ts One conversation per project, plus its expanded chat list
-  stores/archive.ts  Archived conversations, grouped by project, for restoring
+  stores/archive.ts  Archived conversations, grouped by project, for viewing, restoring or deleting
   stores/git.ts      Source-control state: status polling, selection, diffs
   stores/layout.ts   Source-control panel width
   stores/desktopWindow.ts  Maximized state for the chromeless frame
@@ -146,7 +147,7 @@ src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
   components/
     ProjectsPanel.vue     Projects sidebar (expandable into per-project chats)
     ConversationMenu.vue  Rename / archive actions of one conversation row
-    ArchivePanel.vue      Archived conversations, grouped by project, with restore
+    ArchivePanel.vue      Archived conversations, grouped by project: click to view, plus restore and delete
     SourceControl.vue     Right-hand source-control panel (flat, full paths)
     DiffViewer.vue        Split/unified diff view
     FileViewer.vue        Read-only file view
@@ -383,8 +384,10 @@ log, because settings will not persist for that run.
   project row's names its newest conversation, and every row of an expanded list
   carries the actions of the chat it belongs to. Both work against the
   conversation's own project, so no project switch is needed. Archived
-  conversations leave the active lists and search results, and can be restored
-  from the header's archive button.
+  conversations leave the active lists and search results, and can be restored or
+  permanently deleted from the header's archive button. Clicking an archived
+  conversation opens it read-only — its composer is replaced by a notice — so it
+  can be reviewed before deciding; deleting asks for confirmation on the row.
 - The diff viewer renders text patches; binary changes are reported as such.
 - Requires `git` on `PATH` for the source-control panel.
 - The v2 API has no per-message tool toggles or session sharing, so the tools

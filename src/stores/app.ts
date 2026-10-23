@@ -1,6 +1,6 @@
 import type { Credentials } from "@/api/client"
 import type { InstanceInfo } from "@/api/discovery"
-import { sessionDirectory } from "@/api/types"
+import { sessionDirectory, type SessionInfo } from "@/api/types"
 import { useArchive } from "./archive"
 import { useChat } from "./chat"
 import { useConnection } from "./connection"
@@ -106,6 +106,7 @@ export function useApp() {
   async function selectSession(sessionID: string) {
     const client = connection.client.value
     if (!client) return
+    sessions.clearPreview()
     sessions.currentID.value = sessionID
     sessionState.markSeen(sessionID)
     writeSessionParam(sessionID, readSessionParam() === sessionID)
@@ -262,6 +263,19 @@ export function useApp() {
     archive.open.value = false
   }
 
+  /**
+   * Show an archived conversation in the conversation pane without switching
+   * project or adding it to the active lists, so it can be read before deciding
+   * to restore or delete it.
+   */
+  async function viewArchivedSession(session: SessionInfo) {
+    const client = connection.client.value
+    if (!client) return
+    const directory = session.location?.directory ?? server.directory.value
+    sessions.previewSession(session)
+    await chat.open(client, session.id, directory)
+  }
+
   async function restoreSession(sessionID: string, directory?: string) {
     const client = connection.client.value
     if (!client) return false
@@ -277,6 +291,19 @@ export function useApp() {
       if (owner) projects.setLatest(owner, info)
     }
     if (owner) await projects.refreshOne(client, owner)
+    return true
+  }
+
+  /** Permanently delete a conversation, from the archive page or a list. */
+  async function deleteSession(sessionID: string, directory?: string) {
+    const client = connection.client.value
+    if (!client) return false
+    const target = directory ?? server.directory.value
+    await client.deleteSession(sessionID, { directory: target })
+    archive.remove(sessionID)
+    sessions.forget(sessionID)
+    projects.forgetChat(sessionID)
+    if (target) await projects.refreshOne(client, target)
     return true
   }
 
@@ -325,7 +352,9 @@ export function useApp() {
     archiveSession,
     openArchive,
     closeArchive,
+    viewArchivedSession,
     restoreSession,
+    deleteSession,
     renameSession,
     replyPermission,
     replyForm,

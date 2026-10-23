@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { X, CircleAlert, Check, Hash, Moon, Sun } from "lucide-vue-next"
+import { X, CircleAlert, Check, Hash, Moon, Sun, Archive } from "lucide-vue-next"
 import type { AssistantMessage } from "@/api/types"
 import Sidebar from "./Sidebar.vue"
 import SourceControl from "./SourceControl.vue"
@@ -123,6 +123,9 @@ function startScmResize(event: PointerEvent) {
 }
 
 const title = computed(() => current.value?.title || "New chat")
+
+/** Whether the conversation in the pane is an archived one being previewed. */
+const isArchived = computed(() => Boolean(current.value?.time?.archived))
 
 // Reflect the active chat in the browser tab title.
 watch(
@@ -332,6 +335,9 @@ onBeforeUnmount(() => {
       <template v-else>
         <header class="topbar drag-region">
           <h1 class="title">{{ title }}</h1>
+          <span v-if="isArchived" class="archived-pill" title="This conversation is archived">
+            <Archive :size="12" /> Archived
+          </span>
           <div v-if="current" class="stats">
             <span v-if="conversationDate" class="stat" :title="conversationDateTitle">{{ conversationDate }}</span>
             <span v-if="conversationDate" class="stat-divider">·</span>
@@ -374,7 +380,11 @@ onBeforeUnmount(() => {
             <span>{{ error }}</span>
             <button @click="dismissError"><X :size="14" /></button>
           </div>
-          <Composer />
+          <div v-if="isArchived" class="archived-bar">
+            <Archive :size="15" />
+            <span>This conversation is archived. Restore it from the archive page to continue it.</span>
+          </div>
+          <Composer v-else />
         </div>
       </template>
     </main>
@@ -489,6 +499,19 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   flex: 1;
 }
+.archived-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .stats {
   flex: none;
   display: flex;
@@ -573,5 +596,22 @@ onBeforeUnmount(() => {
   border: none;
   color: inherit;
   display: inline-flex;
+}
+.archived-bar {
+  max-width: var(--content-width);
+  margin: 0 auto 10px;
+  width: calc(100% - 40px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.archived-bar span {
+  flex: 1;
 }
 </style>
