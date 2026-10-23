@@ -3,7 +3,6 @@ import type { ServerClient } from "@/api/client"
 import { normalizeOrigin } from "@/api/discovery"
 import type {
   AgentInfo,
-  CommandInfo,
   LocationInfo,
   ModelInfo,
   ModelRef,
@@ -62,7 +61,6 @@ const config = ref<ServerConfig | null>(null)
 const agents = ref<AgentInfo[]>([])
 const providers = ref<ProviderInfo[]>([])
 const models = ref<ModelInfo[]>([])
-const commands = ref<CommandInfo[]>([])
 const projects = ref<ProjectInfo[]>([])
 const selectedDirectory = ref<string | null>(null)
 const loading = ref(false)
@@ -203,19 +201,17 @@ export function useServer() {
       locationInfo.value = location
       selectedDirectory.value = dir ?? null
 
-      const [cfg, agentList, providerList, modelList, commandList, projectList] = await Promise.all([
+      const [cfg, agentList, providerList, modelList, projectList] = await Promise.all([
         client.config({ directory: dir }).catch(() => null),
         client.agents({ directory: dir }).catch(() => [] as AgentInfo[]),
         client.providers({ directory: dir }).catch(() => [] as ProviderInfo[]),
         client.models({ directory: dir }).catch(() => [] as ModelInfo[]),
-        client.commands({ directory: dir }).catch(() => [] as CommandInfo[]),
         client.projects().catch(() => [] as ProjectInfo[]),
       ])
       config.value = cfg
       agents.value = agentList
       providers.value = providerList
       models.value = modelList
-      commands.value = commandList
       projects.value = projectList
       // Don't clobber the current agent/model when only switching project.
       if (changedOrigin || !selectedModel.value) applyDefaults()
@@ -252,7 +248,6 @@ export function useServer() {
     agents.value = []
     providers.value = []
     models.value = []
-    commands.value = []
     projects.value = []
     selectedDirectory.value = null
     selectedModel.value = null
@@ -287,25 +282,12 @@ export function useServer() {
   /** The directory that scopes all instance requests (the selected project). */
   const directory = computed(() => selectedDirectory.value ?? locationInfo.value?.directory ?? undefined)
 
-  /**
-   * Re-read the command list.
-   *
-   * Commands are files on disk, so one can appear while the app is running. The
-   * server announces that on its event stream; without this the slash menu would
-   * only ever show what existed when the project was opened.
-   */
-  async function reloadCommands(client: ServerClient, dir?: string) {
-    const list = await client.commands({ directory: dir ?? directory.value }).catch(() => null)
-    if (list) commands.value = list
-  }
-
   return {
     locationInfo,
     config,
     agents,
     providers,
     models,
-    commands,
     projects,
     selectedDirectory,
     loading,
@@ -322,7 +304,6 @@ export function useServer() {
     imageModels,
     directory,
     load,
-    reloadCommands,
     setDirectory,
     savedDirectory,
     applySavedPrefs,

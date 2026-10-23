@@ -34,16 +34,6 @@ export interface SendInput {
   imageModel?: string | null
 }
 
-export interface CommandInvocation {
-  /** Stored command name, without the leading slash. */
-  name: string
-  /** The command's input, as typed after its name. */
-  text: string
-  files?: Array<{ mime: string; url: string; filename?: string }>
-  model?: ModelRef | null
-  agent?: string
-}
-
 const messages = ref<SessionMessage[]>([])
 const status = ref<ChatStatus>({ type: "idle" })
 const loading = ref(false)
@@ -313,60 +303,6 @@ export function useChat() {
         id: sent?.data?.id ?? `local-${Date.now()}`,
         type: "user",
         text: input.text,
-        files: input.files?.map((file) => ({
-          mime: file.mime,
-          name: file.filename,
-          data: parseDataUrl(file.url)?.data,
-          source: { type: "inline" },
-        })),
-        time: { created: Date.now() },
-      }
-      messages.value = [...messages.value, optimistic]
-      status.value = { type: "busy" }
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err)
-      throw err
-    } finally {
-      sending.value = false
-    }
-  }
-
-  /**
-   * Run a stored command (`/name args`).
-   *
-   * The server expands the command's template and owns the prompt it becomes, so
-   * unlike `send` there is no message id to key an optimistic copy to. The local
-   * placeholder stands in until the next page of the conversation arrives — it is
-   * dropped then, and the expanded message takes its place.
-   */
-  async function sendCommand(
-    client: ServerClient,
-    sessionID: string,
-    input: CommandInvocation,
-    directory?: string,
-  ) {
-    sending.value = true
-    error.value = null
-    scrollToBottomRequest.value++
-    try {
-      // Commands inherit the composer's selection; a command's own agent/model
-      // overrides stay server-owned and apply after this.
-      if (input.model) await client.setModel(sessionID, input.model, { directory })
-      if (input.agent) await client.setAgent(sessionID, input.agent, { directory })
-      await client.command(
-        sessionID,
-        {
-          name: input.name,
-          text: input.text,
-          files: input.files?.map((file) => ({ uri: file.url, name: file.filename })),
-        },
-        { directory },
-      )
-      const invocation = `/${input.name}${input.text ? ` ${input.text}` : ""}`
-      const optimistic: UserMessage = {
-        id: `local-${Date.now()}`,
-        type: "user",
-        text: invocation,
         files: input.files?.map((file) => ({
           mime: file.mime,
           name: file.filename,
@@ -806,7 +742,6 @@ export function useChat() {
     open,
     reconcile,
     send,
-    sendCommand,
     abort,
     replyPermission,
     replyForm,

@@ -219,37 +219,6 @@ export function useApp() {
     )
   }
 
-  /**
-   * Run a stored command (`/name args`) in the current conversation.
-   *
-   * A command is not a message: the server expands its template into the prompt
-   * that actually runs. The composer's agent and model are committed first, the
-   * same way a prompt commits them, so a command without overrides runs on what
-   * the composer shows.
-   */
-  async function sendCommand(name: string, text: string, files: FilePartInput[] = []) {
-    const client = connection.client.value
-    if (!client) return
-    let sessionID = sessions.currentID.value
-    if (!sessionID) {
-      const session = await newChat()
-      if (!session) return
-      sessionID = session.id
-    }
-    await chat.sendCommand(
-      client,
-      sessionID,
-      {
-        name,
-        text,
-        files: files.map((file) => ({ mime: file.mime, url: file.url, filename: file.filename })),
-        model: server.selectedModel.value,
-        agent: server.agent,
-      },
-      server.directory.value,
-    )
-  }
-
   async function abort() {
     const client = connection.client.value
     const sessionID = sessions.currentID.value
@@ -365,7 +334,6 @@ export function useApp() {
     openInitialSession,
     newChat,
     sendMessage,
-    sendCommand,
     abort,
     archiveSession,
     openArchive,

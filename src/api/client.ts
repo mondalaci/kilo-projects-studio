@@ -1,6 +1,5 @@
 import type {
   AgentInfo,
-  CommandInfo,
   DataEnvelope,
   FormDetail,
   FormInfo,
@@ -87,14 +86,6 @@ export interface PromptInput {
   skills?: Array<{ id: string; name: string }>
   metadata?: Record<string, unknown>
   messageID?: string
-}
-
-export interface CommandInput {
-  /** Stored command name, without the leading slash. */
-  name: string
-  /** Everything the user typed after the name; the command's `$ARGUMENTS`. */
-  text: string
-  files?: Array<{ uri: string; name?: string }>
 }
 
 /**
@@ -188,11 +179,6 @@ export class ServerClient {
 
   async models(opts: RequestOptions = {}): Promise<ModelInfo[]> {
     const res = await this.request<DataEnvelope<ModelInfo[]>>("/api/model", opts)
-    return res?.data ?? []
-  }
-
-  async commands(opts: RequestOptions = {}): Promise<CommandInfo[]> {
-    const res = await this.request<DataEnvelope<CommandInfo[]>>("/api/command", opts)
     return res?.data ?? []
   }
 
@@ -329,19 +315,6 @@ export class ServerClient {
       ...opts,
       method: "POST",
       body: input,
-    })
-  }
-
-  /**
-   * Run a stored command (`/name`). The server owns the prompt the command
-   * expands to and answers with no content, so there is nothing to key a local
-   * copy of the message to.
-   */
-  command(sessionID: string, body: CommandInput, opts: RequestOptions = {}) {
-    return this.request<void>(`/api/session/${sessionID}/command`, {
-      ...opts,
-      method: "POST",
-      body,
     })
   }
 

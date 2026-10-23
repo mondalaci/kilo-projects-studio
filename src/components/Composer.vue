@@ -5,18 +5,15 @@ import ShortcutBadge from "./ShortcutBadge.vue"
 import ImageModelSelector from "./ImageModelSelector.vue"
 import ModelSelector from "./ModelSelector.vue"
 import VariantSelector from "./VariantSelector.vue"
-import type { CommandInfo } from "@/api/types"
 import { useApp } from "@/stores/app"
 import { addFile, attachments, clearAttachments, composerFocusRequest, draft, removeAttachment } from "@/stores/draft"
 import { useServer } from "@/stores/server"
-import { fuzzyMatch } from "@/utils/fuzzy"
 import { acceptsText, answerFromText, visibleFields } from "@/utils/form"
-import { parseSlashHead } from "@/utils/slash"
 
 const app = useApp()
 const { sending, isBusy, awaitingUser, pendingForms } = app.chat
-const { abort, sendMessage, sendCommand, replyForm } = app
-const { commands, imageModels, selectedModelInfo, selectedModelVariants } = useServer()
+const { abort, sendMessage, replyForm } = app
+const { imageModels, selectedModelInfo, selectedModelVariants } = useServer()
 
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -48,88 +45,6 @@ const answerableForm = computed(() =>
   pendingForms.value.find((form) => visibleFields(form).some(acceptsText)),
 )
 const placeholder = computed(() => (answerableForm.value ? "Type your answer…" : ""))
-
-/* ------------------------------- slash menu ------------------------------- */
-
-/**
- * The text after a leading `/`, while the draft is still that one token.
- *
- * The menu belongs to the name alone: once a space is typed the name is settled
- * and the rest is the command's input, so the list gets out of the way.
- */
-const slashQuery = computed(() => {
-  const text = draft.value
-  return /^\/\S*$/.test(text) ? text.slice(1) : null
-})
-
-const slashDismissed = ref(false)
-const slashIndex = ref(0)
-const slashList = ref<HTMLElement | null>(null)
-
-/**
- * The commands to offer, best match first.
- *
- * A name match outranks a description match, so `/im` finds `/image` before a
- * command that merely mentions images in its description.
- */
-const slashMatches = computed<CommandInfo[]>(() => {
-  const query = slashQuery.value
-  if (query === null) return []
-  if (!query) return [...commands.value].sort((a, b) => a.name.localeCompare(b.name))
-  return commands.value
-    .map((command) => {
-      const byName = fuzzyMatch(query, command.name)
-      const byDescription = command.description ? fuzzyMatch(query, command.description) : null
-      return {
-        command,
-        score: Math.max(byName ? byName.score + 20 : -Infinity, byDescription?.score ?? -Infinity),
-      }
-    })
-    .filter((item) => Number.isFinite(item.score))
-    .sort((a, b) => b.score - a.score || a.command.name.localeCompare(b.command.name))
-    .map((item) => item.command)
-})
-
-/** The row the keyboard acts on; clamped so a shrinking list cannot point past its end. */
-const slashActive = computed(() => Math.min(slashIndex.value, Math.max(0, slashMatches.value.length - 1)))
-
-const slashMenuOpen = computed(
-  () =>
-    slashQuery.value !== null &&
-    !slashDismissed.value &&
-    !answerableForm.value &&
-    commands.value.length > 0,
-)
-
-// A new query is a new search: the old dismissal and highlight no longer apply.
-watch(slashQuery, () => {
-  slashDismissed.value = false
-  slashIndex.value = 0
-})
-
-watch(slashActive, async (index) => {
-  await nextTick()
-  slashList.value?.querySelectorAll<HTMLElement>(".slash-item")[index]?.scrollIntoView({ block: "nearest" })
-})
-
-function moveSlash(step: number) {
-  const count = slashMatches.value.length
-  if (!count) return
-  slashIndex.value = (slashActive.value + step + count) % count
-}
-
-/** Take a command into the composer, leaving the caret where its input goes. */
-function acceptSlash(command: CommandInfo) {
-  draft.value = `/${command.name} `
-  slashDismissed.value = true
-  void nextTick(() => {
-    resize()
-    const el = textarea.value
-    if (!el) return
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
-  })
-}
 
 watch(draft, () => nextTick(resize))
 watch(composerFocusRequest, () => nextTick(() => textarea.value?.focus()))
@@ -216,19 +131,12 @@ async function submit() {
   }))
   const pending = [...attachments.value]
 
-  // A leading "/name" that names a stored command runs the command rather than
-  // sending text: the server expands its template, and what follows the name
-  // becomes the command's input. An unknown name is just text.
-  const head = parseSlashHead(text)
-  const command = head ? commands.value.find((item) => item.name === head.name) : undefined
-
   draft.value = ""
   clearAttachments()
   await nextTick(resize)
 
   try {
-    if (command && head) await sendCommand(command.name, head.arguments, files)
-    else await sendMessage(text, files)
+    await sendMessage(text, files)
   } catch {
     draft.value = text
     attachments.value = pending
@@ -240,29 +148,6 @@ async function stop() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  // The open menu owns the keys that would otherwise move the caret or submit,
-  // so a command can be picked without touching the mouse.
-  if (slashMenuOpen.value && !event.isComposing) {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault()
-      moveSlash(event.key === "ArrowDown" ? 1 : -1)
-      return
-    }
-    if (event.key === "Enter" || event.key === "Tab") {
-      const command = slashMatches.value[slashActive.value]
-      if (command) {
-        event.preventDefault()
-        acceptSlash(command)
-        return
-      }
-    }
-    if (event.key === "Escape") {
-      event.preventDefault()
-      slashDismissed.value = true
-      return
-    }
-  }
-
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void submit()
@@ -279,24 +164,6 @@ function onKeydown(event: KeyboardEvent) {
       @dragleave.prevent="dragging = false"
       @drop.prevent="onDrop"
     >
-      <div v-if="slashMenuOpen" ref="slashList" class="opencode-menu slash-menu" role="listbox">
-        <button
-          v-for="(command, index) in slashMatches"
-          :key="command.name"
-          type="button"
-          role="option"
-          :aria-selected="index === slashActive"
-          class="slash-item"
-          :class="{ 'is-active': index === slashActive }"
-          @mouseenter="slashIndex = index"
-          @mousedown.prevent="acceptSlash(command)"
-        >
-          <span class="slash-name">/{{ command.name }}</span>
-          <span v-if="command.description" class="slash-desc">{{ command.description }}</span>
-        </button>
-        <div v-if="!slashMatches.length" class="slash-empty">No matching commands</div>
-      </div>
-
       <div v-if="attachments.length" class="attachments">
         <div v-for="item in attachments" :key="item.id" class="attachment" :class="{ file: !isImage(item.mime) }">
           <img v-if="isImage(item.mime)" :src="item.url" :alt="item.filename" />
@@ -399,50 +266,6 @@ function onKeydown(event: KeyboardEvent) {
 .composer.dragging {
   border-color: var(--accent);
   border-style: dashed;
-}
-/* Lifted above the composer: the card sits at the bottom of the window, so the
-   list opens upward, the way the other menus here do. */
-.slash-menu {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: calc(100% + 6px);
-  max-height: min(320px, 50vh);
-  overflow: auto;
-}
-.slash-item {
-  display: grid;
-  gap: 2px;
-  width: 100%;
-  padding: 7px 9px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.slash-item.is-active {
-  background: var(--bg-hover);
-}
-.slash-name {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--text);
-}
-.slash-desc {
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.slash-empty {
-  padding: 12px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  text-align: center;
 }
 .attachments {
   display: flex;
