@@ -52,19 +52,18 @@ const retryNote = computed(() => {
  * The model a message ran on, as the picker named it, with the effort beside it.
  *
  * A message records only the model's id, which reads as a slug rather than as the
- * name the picker showed; the id stays available in the tooltip, and as the
- * fallback for a model the server no longer offers. "default" is the model's own
- * neutral effort, so it is left out.
+ * name the picker showed. This is plain text — `model: effort` — to sit with the
+ * token and cost lines; the id stays available in the tooltip, and as the fallback
+ * for a model the server no longer offers. "default" is the model's own neutral
+ * effort, so it is left out.
  */
 const modelLabel = computed(() => {
   if (props.message.type !== "assistant") return null
   const ref_ = props.message.model
   const info = models.value.find((item) => item.providerID === ref_.providerID && item.id === ref_.id)
-  return {
-    name: info?.name || ref_.id,
-    effort: ref_.variant && ref_.variant !== "default" ? ref_.variant : null,
-    reference: ref_.id,
-  }
+  const name = info?.name || ref_.id
+  const effort = ref_.variant && ref_.variant !== "default" ? ref_.variant : null
+  return { text: effort ? `${name}: ${effort}` : name, reference: ref_.id }
 })
 
 const meta = computed(() => {
@@ -73,8 +72,7 @@ const meta = computed(() => {
   const tokens = message.tokens
   const total = tokens ? tokens.input + tokens.output + tokens.reasoning : 0
   return {
-    model: modelLabel.value?.name ?? "",
-    effort: modelLabel.value?.effort ?? null,
+    model: modelLabel.value?.text ?? "",
     reference: modelLabel.value?.reference ?? "",
     tokens: total,
     cost: message.cost ?? 0,
@@ -142,16 +140,10 @@ function isCompose(block: AssistantToolBlock): boolean {
       <div v-if="retryNote" class="retry">{{ retryNote }}</div>
     </div>
     <div v-if="isUser" class="avatar" aria-hidden="true"><User :size="15" /></div>
-    <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.model">
+    <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.reference || meta.model">
       <div class="meta-inner">
         <div v-if="meta.created" class="meta-row meta-datetime">{{ formatDateTime(meta.created) }}</div>
-        <div class="meta-model-group" :title="meta.reference">
-          <span class="meta-model">{{ meta.model }}</span>
-          <template v-if="meta.effort">
-            <span class="meta-divider" aria-hidden="true"></span>
-            <span class="meta-effort">{{ meta.effort }}</span>
-          </template>
-        </div>
+        <div class="meta-model">{{ meta.model }}</div>
         <div v-if="meta.tokens" class="meta-row">{{ formatTokens(meta.tokens) }} tokens</div>
         <div v-if="meta.cost" class="meta-row">{{ formatCost(meta.cost) }}</div>
       </div>
@@ -288,29 +280,6 @@ function isCompose(block: AssistantToolBlock): boolean {
   top: -10px;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--text-faint);
-}
-/* The model and the effort it ran with, grouped the way the composer groups
-   them, so the same two settings read the same in both places. */
-.meta-model-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-.meta-divider {
-  flex: none;
-  width: 1px;
-  height: 10px;
-  background: var(--border);
-}
-.meta-effort {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
   color: var(--text-faint);
 }
 .meta-model {
