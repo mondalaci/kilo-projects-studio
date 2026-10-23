@@ -64,6 +64,23 @@ async function repoInfo(dir) {
 }
 
 /**
+ * Commits on HEAD that no remote contains — i.e. what `git push` would send.
+ * Reported alongside the status because the file list alone never reveals
+ * committed-but-unpushed work.
+ */
+async function unpushed(root) {
+  const remotes = await git(["-C", root, "remote"])
+  if (!remotes.ok || !remotes.stdout.trim()) return { count: 0, upstream: null }
+
+  const upstream = await git(["-C", root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+  const name = upstream.ok && upstream.stdout.trim() ? upstream.stdout.trim() : null
+  const count = await git(
+    ["-C", root, "rev-list", "--count", ...(name ? ["@{u}..HEAD"] : ["HEAD", "--not", "--remotes"])],
+  )
+  return { count: count.ok ? Number(count.stdout.trim()) || 0 : 0, upstream: name }
+}
+
+/**
  * Parse `git status --porcelain=v1 -z`.
  *
  * With `-z` a plain entry is `XY <path>` terminated by NUL; a rename or copy
@@ -145,16 +162,19 @@ async function sides(root, relative, scope) {
 /** Working-tree status for the repository containing `dir`. */
 async function status(dir) {
   const repo = await repoInfo(dir)
-  if (!repo.isRepo) return { ...repo, files: [] }
+  if (!repo.isRepo) return { ...repo, files: [], unpushed: { count: 0, upstream: null } }
 
   // `--no-optional-locks` is a global git option, so it must precede the
   // subcommand; putting it after `status` makes git reject the whole command.
-  const res = await git(
-    ["-C", repo.root, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    { timeoutMs: 30_000 },
-  )
-  if (!res.ok) return { ...repo, files: [], error: res.stderr.trim() || "git status failed" }
-  return { ...repo, files: parsePorcelain(res.stdout) }
+  const [res, up] = await Promise.all([
+    git(
+      ["-C", repo.root, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+      { timeoutMs: 30_000 },
+    ),
+    unpushed(repo.root),
+  ])
+  if (!res.ok) return { ...repo, files: [], unpushed: up, error: res.stderr.trim() || "git status failed" }
+  return { ...repo, files: parsePorcelain(res.stdout), unpushed: up }
 }
 
 /** Resolve a repo-relative path and refuse anything outside the repository. */

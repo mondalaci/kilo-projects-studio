@@ -1,5 +1,5 @@
 import { computed, ref } from "vue"
-import type { GitDiffRequest, GitFileEntry, GitRepoInfo, GitScope } from "@/api/desktop"
+import type { GitDiffRequest, GitFileEntry, GitRepoInfo, GitScope, GitUnpushed } from "@/api/desktop"
 import { desktopBridge } from "@/api/desktop"
 import { parseDiff, type ParsedDiff } from "@/utils/diff"
 
@@ -38,6 +38,8 @@ const EMPTY_DIFF: ParsedDiff = { meta: [], hunks: [], additions: 0, deletions: 0
 const directory = ref<string | null>(null)
 const repo = ref<GitRepoInfo>({ isRepo: false })
 const files = ref<GitFileEntry[]>([])
+/** Committed but not yet pushed, which the file list cannot show. */
+const unpushed = ref<GitUnpushed>({ count: 0, upstream: null })
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selection = ref<GitRow | null>(null)
@@ -107,6 +109,7 @@ export function useGit() {
       available.value = false
       repo.value = { isRepo: false, reason: "no directory" }
       files.value = []
+      unpushed.value = { count: 0, upstream: null }
       return
     }
 
@@ -124,6 +127,7 @@ export function useGit() {
         head: result.head,
       }
       files.value = Array.isArray(result.files) ? result.files : []
+      unpushed.value = result.unpushed ?? { count: 0, upstream: null }
       error.value = result.error ?? null
       reconcileSelection()
     } catch (err) {
@@ -165,6 +169,7 @@ export function useGit() {
     selection.value = null
     files.value = []
     repo.value = { isRepo: false }
+    unpushed.value = { count: 0, upstream: null }
     directory.value = dir
     if (dir) await refresh(dir)
   }
@@ -279,6 +284,7 @@ export function useGit() {
     directory.value = null
     repo.value = { isRepo: false }
     files.value = []
+    unpushed.value = { count: 0, upstream: null }
     error.value = null
     closeDiff()
   }
@@ -289,6 +295,7 @@ export function useGit() {
     directory,
     repo,
     files,
+    unpushed,
     stagedRows,
     changeRows,
     total,

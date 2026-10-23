@@ -32,8 +32,17 @@ export interface GitFileEntry {
   unstaged: boolean
 }
 
+export interface GitUnpushed {
+  /** Commits on HEAD that the upstream (or any remote) does not contain. */
+  count: number
+  /** The tracked upstream, e.g. `origin/main`, or null when none is set. */
+  upstream: string | null
+}
+
 export interface GitStatusResult extends GitRepoInfo {
   files: GitFileEntry[]
+  /** Committed-but-unpushed work, which the file list does not reveal. */
+  unpushed?: GitUnpushed
   error?: string
 }
 

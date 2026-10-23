@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import { LogOut, Minus, Plus } from "lucide-vue-next"
+import { ArrowUp, LogOut, Minus, Plus } from "lucide-vue-next"
 import FilterBar from "./FilterBar.vue"
 import ShortcutBadge from "./ShortcutBadge.vue"
 import WindowControls from "./WindowControls.vue"
@@ -13,7 +13,7 @@ import { splitPath } from "@/utils/diff"
 
 const app = useApp()
 const git = useGit()
-const { repo, stagedRows, changeRows, total, loading, error, selection, available } = git
+const { repo, stagedRows, changeRows, total, loading, error, selection, available, unpushed } = git
 const { locationInfo } = useServer()
 
 /** Incremental filter over the changed files (Ctrl+P). */
@@ -103,6 +103,14 @@ function isCursor(row: GitRow) {
 /** Where diffs are read from: the repository root, or the project folder. */
 const rootLabel = computed(() => repo.value.root ?? locationInfo.value?.directory ?? "")
 
+/** Tooltip for the unpushed badge: how many commits, and where they are going. */
+const unpushedTitle = computed(() => {
+  const count = unpushed.value.count
+  if (!count) return ""
+  const where = unpushed.value.upstream ? `to ${unpushed.value.upstream}` : "to any remote"
+  return `${count} ${count === 1 ? "commit" : "commits"} not pushed ${where}`
+})
+
 const emptyMessage = computed(() => {
   if (!available.value) return "Git integration is available in the desktop app."
   if (repo.value.reason === "git-not-installed") return "The git executable was not found on this system."
@@ -160,6 +168,11 @@ function parts(path: string) {
         :title="`${total} uncommitted ${total === 1 ? 'change' : 'changes'}`"
       >{{ total }}</span>
       <span v-if="repo.isRepo && repo.branch" class="branch" :title="rootLabel ?? ''">{{ repo.branch }}</span>
+      <!-- Committed but unpushed: invisible to the file list, so it gets its own
+           badge — otherwise a clean tree looks identical to a fully pushed one. -->
+      <span v-if="repo.isRepo && unpushed.count" class="unpushed-pill" :title="unpushedTitle">
+        <ArrowUp :size="11" />{{ unpushed.count }}
+      </span>
       <span class="head-spacer"></span>
       <!-- The panel cannot be hidden, so its header is always the rightmost
            strip of the window: that is where the window buttons live. -->
@@ -314,6 +327,21 @@ function parts(path: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Unpushed commits, beside the branch they belong to. Accent-tinted so it reads
+   as "something to do" rather than as another piece of branch metadata. */
+.unpushed-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 .notice {
   flex: 1;
