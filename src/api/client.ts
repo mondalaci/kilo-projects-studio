@@ -196,12 +196,12 @@ export class ServerClient {
   /* -------------------------------- sessions -------------------------------- */
 
   async listSessions(
-    opts: RequestOptions & { limit?: number; search?: string; cursor?: string } = {},
+    opts: RequestOptions & { limit?: number; search?: string; cursor?: string; archived?: boolean } = {},
   ): Promise<ListEnvelope<SessionInfo>> {
-    const { limit, search, cursor, ...rest } = opts
+    const { limit, search, cursor, archived, ...rest } = opts
     return this.request<ListEnvelope<SessionInfo>>("/api/session", {
       ...rest,
-      query: { limit, search, cursor, ...rest.query },
+      query: { limit, search, cursor, archived, ...rest.query },
     })
   }
 
@@ -222,7 +222,11 @@ export class ServerClient {
     return res?.data ?? null
   }
 
-  async updateSession(sessionID: string, body: { title?: string }, opts: RequestOptions = {}): Promise<SessionInfo | null> {
+  async updateSession(
+    sessionID: string,
+    body: { title?: string; archived?: boolean },
+    opts: RequestOptions = {},
+  ): Promise<SessionInfo | null> {
     const res = await this.request<DataEnvelope<SessionInfo>>(`/api/session/${sessionID}`, {
       ...opts,
       method: "PATCH",

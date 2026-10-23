@@ -173,7 +173,7 @@ export function useProjects() {
     if (chatsPending.value[directory]) return
     chatsPending.value = { ...chatsPending.value, [directory]: true }
     try {
-      const res = await client.listSessions({ directory, limit: CHATS_LIMIT })
+      const res = await client.listSessions({ directory, limit: CHATS_LIMIT, archived: false })
       chats.value = { ...chats.value, [directory]: rootsByNewest(res.data) }
     } catch {
       /* leave whatever was there (usually nothing) in place */
@@ -215,7 +215,7 @@ export function useProjects() {
       const list = [...projects.value]
       const results = await mapLimit(list, 6, async (project) => {
         try {
-          const res = await client.listSessions({ directory: project.canonical, limit: 10 })
+          const res = await client.listSessions({ directory: project.canonical, limit: 10, archived: false })
           return [project.canonical, newestSession(res.data)] as const
         } catch {
           return [project.canonical, null] as const
@@ -236,7 +236,7 @@ export function useProjects() {
   /** Re-read one project's newest conversation (after a new chat, say). */
   async function refreshOne(client: ServerClient, target: string) {
     try {
-      const res = await client.listSessions({ directory: target, limit: 10 })
+      const res = await client.listSessions({ directory: target, limit: 10, archived: false })
       latest.value = { ...latest.value, [target]: newestSession(res.data) }
     } catch {
       /* leave the previous value in place */
@@ -259,9 +259,19 @@ export function useProjects() {
           }
         }
       }
-    } else if (type === "session.deleted") {
+    } else if (type === "session.deleted" || type === "session.archived") {
       const id = data.sessionID as string | undefined
-      if (id) forgetChat(id)
+      const directory = (data.location as { directory?: string } | undefined)?.directory
+      if (id) {
+        forgetChat(id)
+        if (directory && latest.value[directory]?.id === id) {
+          const remaining = chats.value[directory]
+          latest.value = {
+            ...latest.value,
+            [directory]: remaining?.length ? rootsByNewest(remaining)[0] : null,
+          }
+        }
+      }
     }
   }
 

@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuRoot,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "reka-ui"
-import { Folder, MessageSquare, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-vue-next"
+import { Folder, MessageSquare, ChevronRight } from "lucide-vue-next"
+import ConversationMenu from "./ConversationMenu.vue"
 import FilterBar from "./FilterBar.vue"
 import ShortcutBadge from "./ShortcutBadge.vue"
 import Spinner from "./Spinner.vue"
@@ -24,7 +17,7 @@ import { fuzzyMatch } from "@/utils/fuzzy"
 
 const app = useApp()
 const { entries, loading, pending, current, isExpanded, chatsFor, isChatsLoading, toggleExpanded } = app.projects
-const { openProject, removeSession, renameSession, selectSession, switchProject } = app
+const { openProject, archiveSession, renameSession, selectSession, switchProject } = app
 const { stateFor, reasonFor } = useSessionState()
 
 /** The conversation whose title is being edited inline, and its project. */
@@ -341,53 +334,47 @@ function onKeydown(event: KeyboardEvent) {
         <div v-if="isExpanded(entry.directory)" class="chats">
           <p v-if="isChatsLoading(entry.directory)" class="chats-note"><Spinner :size="11" /> Loading chats…</p>
           <template v-else>
-            <button
+            <div
               v-for="chat in projectChats(entry)"
               :key="chat.id"
               class="chat"
               :class="{ current: chat.id === app.sessions.currentID.value }"
-              @click="openChat(entry, chat)"
             >
-              <span class="state-dot" :class="stateFor(chat.id)" :title="reasonFor(chat.id)"></span>
-              <input
-                v-if="isEditing(chat.id)"
-                :ref="setRenameInput"
-                v-model="editTitle"
-                class="rename"
-                @click.stop
-                @keydown.enter.prevent="commitRename"
-                @keydown.esc.prevent="cancelRename"
-                @blur="commitRename"
+              <button class="chat-hit" @click="openChat(entry, chat)">
+                <span class="state-dot" :class="stateFor(chat.id)" :title="reasonFor(chat.id)"></span>
+                <input
+                  v-if="isEditing(chat.id)"
+                  :ref="setRenameInput"
+                  v-model="editTitle"
+                  class="rename"
+                  @click.stop
+                  @keydown.enter.prevent="commitRename"
+                  @keydown.esc.prevent="cancelRename"
+                  @blur="commitRename"
+                />
+                <span v-else class="chat-title">{{ chat.title || "Untitled" }}</span>
+                <span class="chat-time">{{ relativeTime(chat.time?.updated ?? chat.time?.created) }}</span>
+              </button>
+              <!-- Each chat carries its own actions, so the menu can never act on
+                   a different conversation than the row it was opened from. -->
+              <ConversationMenu
+                v-if="!isEditing(chat.id)"
+                @rename="startRename(chat, entry.directory)"
+                @archive="archiveSession(chat.id, entry.directory)"
               />
-              <span v-else class="chat-title">{{ chat.title || "Untitled" }}</span>
-              <span class="chat-time">{{ relativeTime(chat.time?.updated ?? chat.time?.created) }}</span>
-            </button>
+            </div>
             <p v-if="!projectChats(entry).length" class="chats-note">No conversations yet.</p>
           </template>
         </div>
 
-        <DropdownMenuRoot v-if="entry.session && !isEditing(entry.session.id)">
-          <DropdownMenuTrigger as-child>
-            <span class="project-menu" title="Conversation actions" @click.stop><MoreHorizontal :size="14" /></span>
-          </DropdownMenuTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuContent class="opencode-menu" :side-offset="4" align="start">
-              <DropdownMenuItem
-                class="opencode-menu-item"
-                @select="entry.session && startRename(entry.session, entry.directory)"
-              >
-                <Pencil :size="14" /> Rename conversation
-              </DropdownMenuItem>
-              <DropdownMenuSeparator class="opencode-menu-sep" />
-              <DropdownMenuItem
-                class="opencode-menu-item danger"
-                @select="entry.session && removeSession(entry.session.id, entry.directory)"
-              >
-                <Trash2 :size="14" /> Delete conversation
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenuPortal>
-        </DropdownMenuRoot>
+        <!-- Collapsed rows name the newest conversation inline, so that is the
+             conversation the row's menu acts on. Expanded rows leave the actions
+             to the chat list above. -->
+        <ConversationMenu
+          v-if="entry.session && !isExpanded(entry.directory) && !isEditing(entry.session.id)"
+          @rename="startRename(entry.session, entry.directory)"
+          @archive="archiveSession(entry.session.id, entry.directory)"
+        />
       </div>
 
       <p v-if="!filtered.length && !loading" class="empty">
@@ -480,6 +467,13 @@ function onKeydown(event: KeyboardEvent) {
   padding-bottom: 3px;
 }
 .chat {
+  position: relative;
+  border-radius: var(--radius-sm);
+}
+.chat:hover {
+  background: var(--bg-active);
+}
+.chat-hit {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -491,9 +485,6 @@ function onKeydown(event: KeyboardEvent) {
   border-radius: var(--radius-sm);
   text-align: left;
 }
-.chat:hover {
-  background: var(--bg-active);
-}
 /* The open conversation is marked on its title, like the search results. */
 .chat.current .chat-title {
   color: var(--accent);
@@ -504,6 +495,11 @@ function onKeydown(event: KeyboardEvent) {
   font-size: 10.5px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
+  transition: opacity 0.1s ease;
+}
+/* The actions button replaces the timestamp instead of covering half of it. */
+.chat:hover .chat-time {
+  opacity: 0;
 }
 .chats-note {
   display: flex;
@@ -597,26 +593,17 @@ function onKeydown(event: KeyboardEvent) {
   color: var(--text);
   outline: none;
 }
-/* The actions button sits over the timestamp and shows on hover. */
-.project-menu {
-  position: absolute;
-  top: 5px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  color: var(--text-muted);
-  background: var(--bg-active);
-  opacity: 0;
-}
-.project:hover .project-menu {
+/* The actions button sits over the row's timestamp and shows on hover; the
+   trigger's own look lives in ConversationMenu. Rows scope it to themselves, so
+   hovering a chat never reveals its siblings' buttons. */
+.project:hover > :deep(.conversation-menu),
+.chat:hover :deep(.conversation-menu) {
   opacity: 1;
 }
-.project-menu:hover {
-  color: var(--text);
+/* Chat rows are shorter than the project row, so center the button on them. */
+.chat :deep(.conversation-menu) {
+  top: 50%;
+  transform: translateY(-50%);
 }
 .empty {
   text-align: center;

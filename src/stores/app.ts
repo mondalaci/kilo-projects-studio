@@ -1,6 +1,7 @@
 import type { Credentials } from "@/api/client"
 import type { InstanceInfo } from "@/api/discovery"
 import { sessionDirectory } from "@/api/types"
+import { useArchive } from "./archive"
 import { useChat } from "./chat"
 import { useConnection } from "./connection"
 import { draft, requestComposerFocus } from "./draft"
@@ -31,6 +32,7 @@ export function useApp() {
   const files = useFiles()
   const fileViewer = useFileViewer()
   const sessionState = useSessionState()
+  const archive = useArchive()
 
   /** Load the conversation list and event stream for the current project. */
   async function loadScoped(client: NonNullable<typeof connection.client.value>) {
@@ -47,6 +49,7 @@ export function useApp() {
     files.reset()
     fileViewer.close()
     sessionState.reset()
+    archive.reset()
 
     server.applySavedPrefs(info.origin)
 
@@ -80,6 +83,7 @@ export function useApp() {
       sessions.reset()
       projects.reset()
       server.reset()
+      archive.reset()
       connection.disconnect()
       connection.connectError.value = error instanceof Error ? error.message : String(error)
       return false
@@ -95,6 +99,7 @@ export function useApp() {
     files.reset()
     fileViewer.close()
     sessionState.reset()
+    archive.reset()
     connection.disconnect()
   }
 
@@ -234,16 +239,45 @@ export function useApp() {
     await chat.abort(client, sessionID, server.directory.value)
   }
 
-  async function removeSession(sessionID: string, directory?: string) {
+  async function archiveSession(sessionID: string, directory?: string) {
     const client = connection.client.value
     if (!client) return
     const target = directory ?? server.directory.value
-    await sessions.remove(client, sessionID, target)
+    await sessions.archive(client, sessionID, target)
     projects.forgetChat(sessionID)
     if (target === server.directory.value && !sessions.currentID.value && sessions.sorted.value[0]) {
       await selectSession(sessions.sorted.value[0].id)
     }
     if (target) await projects.refreshOne(client, target)
+  }
+
+  async function openArchive() {
+    const client = connection.client.value
+    if (!client) return
+    archive.open.value = true
+    await archive.load(client)
+  }
+
+  function closeArchive() {
+    archive.open.value = false
+  }
+
+  async function restoreSession(sessionID: string, directory?: string) {
+    const client = connection.client.value
+    if (!client) return false
+    const target = directory ?? server.directory.value
+    await client.updateSession(sessionID, { archived: false }, { directory: target })
+    archive.remove(sessionID)
+
+    // The PATCH answers 204, so re-read the row to put it back in the lists.
+    const info = await client.getSession(sessionID).catch(() => null)
+    const owner = info ? (sessionDirectory(info) ?? target) : target
+    if (info) {
+      if (owner && owner === server.directory.value) sessions.upsert(info)
+      if (owner) projects.setLatest(owner, info)
+    }
+    if (owner) await projects.refreshOne(client, owner)
+    return true
   }
 
   async function renameSession(sessionID: string, title: string, directory?: string) {
@@ -274,6 +308,7 @@ export function useApp() {
     server,
     sessions,
     projects,
+    archive,
     sessionState,
     chat,
     live,
@@ -287,7 +322,10 @@ export function useApp() {
     newChat,
     sendMessage,
     abort,
-    removeSession,
+    archiveSession,
+    openArchive,
+    closeArchive,
+    restoreSession,
     renameSession,
     replyPermission,
     replyForm,

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import { MessageSquarePlus, Search } from "lucide-vue-next"
+import { Archive, MessageSquarePlus, Search } from "lucide-vue-next"
 import ShortcutBadge from "./ShortcutBadge.vue"
 import ProjectsPanel from "./ProjectsPanel.vue"
 import SidebarSearch from "./SidebarSearch.vue"
+import ArchivePanel from "./ArchivePanel.vue"
+import { archiveOpen } from "@/stores/archive"
 import { useApp } from "@/stores/app"
 import { openSearch, searchOpen } from "@/stores/search"
 
 const app = useApp()
-const { newChat } = app
+const { newChat, openArchive } = app
 
 /** How many projects the list holds; shown next to the header label. */
 const projectCount = computed(() => app.projects.entries.value.length)
@@ -18,6 +20,7 @@ const projectCount = computed(() => app.projects.entries.value.length)
 <template>
   <aside class="sidebar">
     <SidebarSearch v-if="searchOpen" />
+    <ArchivePanel v-else-if="archiveOpen" />
     <template v-else>
       <header class="head drag-region">
         <span class="logo">K</span>
@@ -26,6 +29,9 @@ const projectCount = computed(() => app.projects.entries.value.length)
         <button class="icon" title="Search conversations (Alt+F)" @click="openSearch()">
           <Search :size="16" />
           <ShortcutBadge placement="inside" modifier="alt" key-label="F" />
+        </button>
+        <button class="icon" title="Archived conversations" @click="openArchive()">
+          <Archive :size="16" />
         </button>
         <button class="icon" title="New chat (Alt+N)" @click="newChat()">
           <MessageSquarePlus :size="17" />

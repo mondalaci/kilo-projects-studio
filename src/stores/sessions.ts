@@ -29,7 +29,7 @@ export function useSessions() {
   async function load(client: ServerClient, directory?: string, limit = DEFAULT_LIMIT) {
     loading.value = true
     try {
-      const res = await client.listSessions({ directory, limit })
+      const res = await client.listSessions({ directory, limit, archived: false })
       sessions.value = res.data.filter((session) => !session.parentID)
     } finally {
       loading.value = false
@@ -41,7 +41,12 @@ export function useSessions() {
     client: ServerClient,
     opts: { directory?: string; search?: string; limit?: number } = {},
   ) {
-    const res = await client.listSessions({ directory: opts.directory, limit: opts.limit ?? DEFAULT_LIMIT, search: opts.search })
+    const res = await client.listSessions({
+      directory: opts.directory,
+      limit: opts.limit ?? DEFAULT_LIMIT,
+      search: opts.search,
+      archived: false,
+    })
     return res.data.filter((session) => !session.parentID)
   }
 
@@ -58,10 +63,15 @@ export function useSessions() {
     return session
   }
 
-  async function remove(client: ServerClient, sessionID: string, directory?: string) {
-    await client.deleteSession(sessionID, { directory })
+  /** Archive a conversation so it leaves the active lists but stays recoverable. */
+  async function archive(client: ServerClient, sessionID: string, directory?: string) {
+    await client.updateSession(sessionID, { archived: true }, { directory })
     sessions.value = sessions.value.filter((item) => item.id !== sessionID)
     if (currentID.value === sessionID) currentID.value = null
+  }
+
+  async function unarchive(client: ServerClient, sessionID: string, directory?: string) {
+    await client.updateSession(sessionID, { archived: false }, { directory })
   }
 
   async function rename(client: ServerClient, sessionID: string, title: string, directory?: string) {
@@ -98,7 +108,7 @@ export function useSessions() {
           ...sessions.value,
         ]
       }
-    } else if (type === "session.deleted") {
+    } else if (type === "session.deleted" || type === "session.archived") {
       const id = (data.sessionID as string) ?? (data.info as { id?: string } | undefined)?.id
       if (id) {
         sessions.value = sessions.value.filter((item) => item.id !== id)
@@ -112,5 +122,20 @@ export function useSessions() {
     currentID.value = null
   }
 
-  return { sessions, sorted, current, currentID, loading, load, query, create, remove, rename, applyEvent, reset, upsert }
+  return {
+    sessions,
+    sorted,
+    current,
+    currentID,
+    loading,
+    load,
+    query,
+    create,
+    archive,
+    unarchive,
+    rename,
+    applyEvent,
+    reset,
+    upsert,
+  }
 }
