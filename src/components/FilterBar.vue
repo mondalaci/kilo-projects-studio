@@ -96,31 +96,62 @@ const filtered = computed(() => props.shown !== props.total)
 
 <template>
   <div class="filter-bar">
-    <input
-      ref="input"
-      v-model="query"
-      class="filter-input"
-      type="text"
-      :placeholder="placeholder"
-      spellcheck="false"
-      autocomplete="off"
-      @keydown="onKeydown"
-    />
-    <span v-if="filtered" class="filter-count">{{ shown }}/{{ total }}</span>
-    <button class="editor-icon" title="Clear filter (Esc)" @click="clear"><X :size="14" /></button>
+    <div class="filter-bar-clip">
+      <div class="filter-bar-inner">
+        <input
+          ref="input"
+          v-model="query"
+          class="filter-input"
+          type="text"
+          :placeholder="placeholder"
+          spellcheck="false"
+          autocomplete="off"
+          @keydown="onKeydown"
+        />
+        <span v-if="filtered" class="filter-count">{{ shown }}/{{ total }}</span>
+        <button class="editor-icon" title="Clear filter (Esc)" @click="clear"><X :size="14" /></button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .filter-bar {
   flex: none;
+  /* A single grid row that grows from 0 so the bar's height can animate, which
+     is what pushes the list below it down smoothly instead of jumping. */
+  display: grid;
+  grid-template-rows: 1fr;
+  /* The bars sit outside the drag regions, but never opt into them. */
+  -webkit-app-region: no-drag;
+}
+.filter-bar-clip {
+  /* Collapses with the row and clips the padded content while it does, so the
+     bar reaches zero height rather than stopping at its padding. */
+  min-height: 0;
+  overflow: hidden;
+}
+.filter-bar-inner {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  /* The bars sit outside the drag regions, but never opt into them. */
-  -webkit-app-region: no-drag;
+}
+/* Ctrl+R / Ctrl+P reveal the bar: fade it in and drop it while its row grows
+   from 0, so the list below is pushed down rather than snapping. The classes
+   land on this component's root, so they live here and serve both the projects
+   and source-control bars. Deliberately not gated on `prefers-reduced-motion`,
+   matching the app's other reveal animations. */
+.filter-bar-enter-active,
+.filter-bar-leave-active {
+  transition: grid-template-rows 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+.filter-bar-enter-from,
+.filter-bar-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
 }
 .filter-input {
   flex: 1;

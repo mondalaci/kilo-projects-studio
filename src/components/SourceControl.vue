@@ -179,17 +179,19 @@ function parts(path: string) {
       <WindowControls />
     </header>
 
-    <FilterBar
-      v-if="filtering && (stagedRows.length || changeRows.length)"
-      target="changes"
-      placeholder="Filter changed files…"
-      :shown="stagedFiltered.length + changeFiltered.length"
-      :total="total"
-      @update:query="query = $event"
-      @move="moveCursor"
-      @open="openCursor"
-      @close="closeFilter"
-    />
+    <Transition name="filter-bar">
+      <FilterBar
+        v-if="filtering && (stagedRows.length || changeRows.length)"
+        target="changes"
+        placeholder="Filter changed files…"
+        :shown="stagedFiltered.length + changeFiltered.length"
+        :total="total"
+        @update:query="query = $event"
+        @move="moveCursor"
+        @open="openCursor"
+        @close="closeFilter"
+      />
+    </Transition>
 
     <div v-if="!available || !repo.isRepo" class="notice">
       <p>{{ emptyMessage }}</p>

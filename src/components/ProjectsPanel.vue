@@ -267,17 +267,19 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="projects-wrap">
-    <FilterBar
-      v-if="filtering"
-      target="projects"
-      placeholder="Filter projects…"
-      :shown="filtered.length"
-      :total="entries.length"
-      @update:query="query = $event"
-      @move="moveCursor"
-      @open="openCursor"
-      @close="closeFilter"
-    />
+    <Transition name="filter-bar">
+      <FilterBar
+        v-if="filtering"
+        target="projects"
+        placeholder="Filter projects…"
+        :shown="filtered.length"
+        :total="entries.length"
+        @update:query="query = $event"
+        @move="moveCursor"
+        @open="openCursor"
+        @close="closeFilter"
+      />
+    </Transition>
 
     <nav ref="navEl" class="projects" tabindex="-1" @keydown="onKeydown" @blur="endNav">
       <div
