@@ -5,6 +5,7 @@ import type { AssistantBlock, AssistantReasoningBlock, AssistantToolBlock, Sessi
 import { formatCost, formatDateTime, formatTokens } from "@/utils/format"
 import { composedMessage } from "@/utils/compose"
 import { heldModifier } from "@/stores/shortcuts"
+import { useServer } from "@/stores/server"
 import Markdown from "./Markdown.vue"
 import PartFile from "./PartFile.vue"
 import PartMessageCompose from "./PartMessageCompose.vue"
@@ -12,6 +13,9 @@ import PartReasoning from "./PartReasoning.vue"
 import PartTool from "./PartTool.vue"
 
 const props = defineProps<{ message: SessionMessage; streaming?: boolean; caret?: boolean }>()
+
+/** The model list, for naming the model a message ran on. */
+const { models } = useServer()
 
 const isUser = computed(() => props.message.type === "user")
 const isAssistant = computed(() => props.message.type === "assistant")
@@ -44,12 +48,38 @@ const retryNote = computed(() => {
   return `Retrying (attempt ${props.message.retry.attempt})…`
 })
 
+/**
+ * The model a message ran on, as the picker named it, with the effort beside it.
+ *
+ * A message records only the model's id, which reads as a slug rather than as the
+ * name the picker showed; the id stays available in the tooltip, and as the
+ * fallback for a model the server no longer offers. "default" is the model's own
+ * neutral effort, so it is left out.
+ */
+const modelLabel = computed(() => {
+  if (props.message.type !== "assistant") return null
+  const ref_ = props.message.model
+  const info = models.value.find((item) => item.providerID === ref_.providerID && item.id === ref_.id)
+  return {
+    name: info?.name || ref_.id,
+    effort: ref_.variant && ref_.variant !== "default" ? ref_.variant : null,
+    reference: ref_.id,
+  }
+})
+
 const meta = computed(() => {
   if (props.message.type !== "assistant") return null
   const message = props.message
   const tokens = message.tokens
   const total = tokens ? tokens.input + tokens.output + tokens.reasoning : 0
-  return { model: message.model.id, tokens: total, cost: message.cost ?? 0, created: message.time?.created }
+  return {
+    model: modelLabel.value?.name ?? "",
+    effort: modelLabel.value?.effort ?? null,
+    reference: modelLabel.value?.reference ?? "",
+    tokens: total,
+    cost: message.cost ?? 0,
+    created: message.time?.created,
+  }
 })
 
 function isCompose(block: AssistantToolBlock): boolean {
@@ -115,7 +145,13 @@ function isCompose(block: AssistantToolBlock): boolean {
     <div v-if="meta && !streaming && heldModifier === 'alt'" class="meta" :title="meta.model">
       <div class="meta-inner">
         <div v-if="meta.created" class="meta-row meta-datetime">{{ formatDateTime(meta.created) }}</div>
-        <div class="meta-model">{{ meta.model }}</div>
+        <div class="meta-model-group" :title="meta.reference">
+          <span class="meta-model">{{ meta.model }}</span>
+          <template v-if="meta.effort">
+            <span class="meta-divider" aria-hidden="true"></span>
+            <span class="meta-effort">{{ meta.effort }}</span>
+          </template>
+        </div>
         <div v-if="meta.tokens" class="meta-row">{{ formatTokens(meta.tokens) }} tokens</div>
         <div v-if="meta.cost" class="meta-row">{{ formatCost(meta.cost) }}</div>
       </div>
@@ -252,6 +288,29 @@ function isCompose(block: AssistantToolBlock): boolean {
   top: -10px;
   font-size: 11px;
   line-height: 1.5;
+  color: var(--text-faint);
+}
+/* The model and the effort it ran with, grouped the way the composer groups
+   them, so the same two settings read the same in both places. */
+.meta-model-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.meta-divider {
+  flex: none;
+  width: 1px;
+  height: 10px;
+  background: var(--border);
+}
+.meta-effort {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
   color: var(--text-faint);
 }
 .meta-model {
