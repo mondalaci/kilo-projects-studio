@@ -342,6 +342,10 @@ function parts(path: string) {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: 999px;
   padding: 1px 7px;
+  /* The header is a window drag region, and a drag region receives no hover
+     events — which is what a native `title` tooltip needs. Opting the pill out
+     is what makes its tooltip appear. */
+  -webkit-app-region: no-drag;
 }
 .notice {
   flex: 1;
