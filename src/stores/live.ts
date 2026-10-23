@@ -108,6 +108,10 @@ function apply(event: ServerEvent) {
   projects.applyEvent(event.type, data)
   chat.applyEvent(event.type, data)
 
+  // A command is a file: one can be added or edited while the app runs, and the
+  // server announces the change on this stream.
+  if (activeClient && event.type === "command.updated") void server.reloadCommands(activeClient)
+
   if (event.type === "session.archived" || event.type === "session.unarchived") {
     const directory =
       event.location?.directory ?? (data?.location as { directory?: string } | undefined)?.directory

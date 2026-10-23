@@ -89,6 +89,14 @@ export interface PromptInput {
   messageID?: string
 }
 
+export interface CommandInput {
+  /** Stored command name, without the leading slash. */
+  name: string
+  /** Everything the user typed after the name; the command's `$ARGUMENTS`. */
+  text: string
+  files?: Array<{ uri: string; name?: string }>
+}
+
 /**
  * Thin client over the opencode **v2** HTTP API (`/api/*`).
  *
@@ -324,12 +332,13 @@ export class ServerClient {
     })
   }
 
-  command(
-    sessionID: string,
-    body: { command: string; arguments?: string; agent?: string; model?: string },
-    opts: RequestOptions = {},
-  ) {
-    return this.request<DataEnvelope<unknown>>(`/api/session/${sessionID}/command`, {
+  /**
+   * Run a stored command (`/name`). The server owns the prompt the command
+   * expands to and answers with no content, so there is nothing to key a local
+   * copy of the message to.
+   */
+  command(sessionID: string, body: CommandInput, opts: RequestOptions = {}) {
+    return this.request<void>(`/api/session/${sessionID}/command`, {
       ...opts,
       method: "POST",
       body,

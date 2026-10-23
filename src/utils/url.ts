@@ -16,11 +16,6 @@ export function readQueryParam(): string | null {
   return readParam("query")
 }
 
-/** Agent/mode name to preselect, from `?agent=`. */
-export function readAgentParam(): string | null {
-  return readParam("agent")
-}
-
 /** Whether the initial query should be sent automatically, from `?submit=`. */
 export function readAutoSubmitParam(): boolean {
   const value = readParam("submit")
@@ -33,7 +28,7 @@ export function readAutoSubmitParam(): boolean {
 export function clearPromptParams() {
   try {
     const url = new URL(window.location.href)
-    for (const name of ["query", "agent", "submit"]) {
+    for (const name of ["query", "submit"]) {
       url.searchParams.delete(name)
     }
     history.replaceState(history.state, "", url.toString())

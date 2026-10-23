@@ -233,10 +233,6 @@ function onKeyDown(event: KeyboardEvent) {
       event.preventDefault()
       requestOpen("model")
       break
-    case shortcutKeys.agent:
-      event.preventDefault()
-      requestOpen("agent")
-      break
     case shortcutKeys.project:
       event.preventDefault()
       requestOpen("project")

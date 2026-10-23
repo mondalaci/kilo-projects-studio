@@ -27,6 +27,14 @@ import { openRequests } from "@/stores/shortcuts"
 
 const { providerGroups, models, selectedModel, setModel } = useServer()
 
+/**
+ * Inside a control group the surrounding pill supplies the border, so a segment
+ * only draws its own contents and a hover fill. The value says which end of the
+ * group it sits on, since a rounded pill has to close at both ends — and the
+ * group cannot clip its segments, because the Alt-key badges float above them.
+ */
+const props = defineProps<{ grouped?: "start" | "end" | "both" }>()
+
 const open = ref(false)
 const query = ref("")
 const showAll = ref(false)
@@ -214,7 +222,10 @@ function costColor(model: ModelInfo): string | undefined {
     :open-on-focus="true"
     class="opencode-model-root"
   >
-    <ComboboxAnchor class="opencode-model-anchor">
+    <ComboboxAnchor
+      class="opencode-model-anchor"
+      :class="props.grouped ? ['is-grouped', `is-grouped-${props.grouped}`] : undefined"
+    >
       <Brain :size="14" class="opencode-model-anchor-icon" />
       <ComboboxInput
         ref="inputRef"
@@ -311,6 +322,27 @@ function costColor(model: ModelInfo): string | undefined {
 }
 .opencode-model-anchor:focus-within {
   border-color: var(--accent);
+}
+/* Grouped: the group owns the pill, the segment owns its contents. */
+.opencode-model-anchor.is-grouped {
+  height: 100%;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+}
+.opencode-model-anchor.is-grouped-start {
+  border-radius: 999px 0 0 999px;
+}
+.opencode-model-anchor.is-grouped-both {
+  border-radius: 999px;
+}
+.opencode-model-anchor.is-grouped:hover {
+  background: var(--bg-hover);
+}
+.opencode-model-anchor.is-grouped .opencode-model-input {
+  /* The group shares one line with three other controls, so the name yields
+     before the group runs out of room. */
+  max-width: 150px;
 }
 .opencode-model-anchor-icon {
   color: var(--accent);

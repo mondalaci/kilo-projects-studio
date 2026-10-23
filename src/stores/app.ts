@@ -10,12 +10,10 @@ import { useFiles } from "./files"
 import { useSessionState } from "./sessionState"
 import { useLive } from "./live"
 import { useProjects } from "./projects"
-import { loadRuntimeConfig } from "./runtimeConfig"
 import { useServer } from "./server"
 import { useSessions } from "./sessions"
 import {
   clearPromptParams,
-  readAgentParam,
   readAutoSubmitParam,
   readQueryParam,
   readSessionParam,
@@ -74,7 +72,6 @@ export function useApp() {
       sessionState.start(client)
 
       await openInitialSession()
-      await applyRuntimeDefaults()
       await applyLinkParams()
       return true
     } catch (error) {
@@ -142,19 +139,7 @@ export function useApp() {
     if (session) await selectSession(session.id)
   }
 
-  async function applyRuntimeDefaults() {
-    const { defaultAgent } = await loadRuntimeConfig()
-    if (defaultAgent && server.modes.value.some((mode) => mode.id === defaultAgent)) {
-      server.selectedAgent.value = defaultAgent
-    }
-  }
-
   async function applyLinkParams() {
-    const agent = readAgentParam()
-    if (agent && server.modes.value.some((mode) => mode.id === agent)) {
-      server.selectedAgent.value = agent
-    }
-
     const query = readQueryParam()
     if (query !== null) draft.value = query
 
@@ -198,7 +183,7 @@ export function useApp() {
     if (!client) return null
     const session = await sessions.create(
       client,
-      { agent: server.selectedAgent.value, model: server.selectedModel.value ?? undefined },
+      { agent: server.agent, model: server.selectedModel.value ?? undefined },
       server.directory.value,
     )
     if (server.directory.value) projects.setLatest(server.directory.value, session)
@@ -227,7 +212,39 @@ export function useApp() {
         text: content,
         files: files.map((file) => ({ mime: file.mime, url: file.url, filename: file.filename })),
         model: server.selectedModel.value,
-        agent: server.selectedAgent.value,
+        agent: server.agent,
+        imageModel: server.selectedImageModel.value,
+      },
+      server.directory.value,
+    )
+  }
+
+  /**
+   * Run a stored command (`/name args`) in the current conversation.
+   *
+   * A command is not a message: the server expands its template into the prompt
+   * that actually runs. The composer's agent and model are committed first, the
+   * same way a prompt commits them, so a command without overrides runs on what
+   * the composer shows.
+   */
+  async function sendCommand(name: string, text: string, files: FilePartInput[] = []) {
+    const client = connection.client.value
+    if (!client) return
+    let sessionID = sessions.currentID.value
+    if (!sessionID) {
+      const session = await newChat()
+      if (!session) return
+      sessionID = session.id
+    }
+    await chat.sendCommand(
+      client,
+      sessionID,
+      {
+        name,
+        text,
+        files: files.map((file) => ({ mime: file.mime, url: file.url, filename: file.filename })),
+        model: server.selectedModel.value,
+        agent: server.agent,
       },
       server.directory.value,
     )
@@ -348,6 +365,7 @@ export function useApp() {
     openInitialSession,
     newChat,
     sendMessage,
+    sendCommand,
     abort,
     archiveSession,
     openArchive,

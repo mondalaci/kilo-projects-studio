@@ -5,14 +5,12 @@
  * It is a plain static file, so it can be edited on a running deployment and
  * picked up on the next reload — no rebuild or restart needed. A missing or
  * invalid file is treated as an empty config, so the app keeps its defaults.
+ *
+ * It has no settings at the moment: the only one it carried preselected an agent,
+ * and the app now runs everything on `build`. Nothing loads it yet — keep it for
+ * the next deployment-wide setting, or delete it with its example file.
  */
-export interface RuntimeConfig {
-  /**
-   * Primary agent to select on load, when it matches an available agent. A
-   * `?agent=` GET param still takes precedence when present.
-   */
-  defaultAgent?: string | null
-}
+export interface RuntimeConfig {}
 
 const CONFIG_URL = `${import.meta.env.BASE_URL}opencode-projects-studio.json`
 

@@ -15,7 +15,7 @@ import type {
 const PREFS_KEY = "opencode-projects-studio.prefs"
 
 interface Preferences {
-  [origin: string]: { agent?: string; model?: ModelRef; directory?: string }
+  [origin: string]: { model?: ModelRef; directory?: string; imageModel?: string }
 }
 
 function loadPrefs(): Preferences {
@@ -68,8 +68,18 @@ const selectedDirectory = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const selectedAgent = ref<string>("build")
+/**
+ * The agent every session runs on.
+ *
+ * The app runs everything on `build`. The tutor became a project with its own
+ * AGENTS.md and the local-machine agent was a second copy of build, so nothing
+ * picks an agent any more: no picker, no saved preference, no `?agent=` param.
+ */
+const agent = "build"
+
 const selectedModel = ref<ModelRef | null>(null)
+/** Image model the `generate_image` tool should use; null means its own default. */
+const selectedImageModel = ref<string | null>(null)
 
 /** A provider is "connected" when it is not explicitly disabled. */
 function providerConnected(provider: ProviderInfo): boolean {
@@ -98,10 +108,10 @@ const providerGroups = computed<ModelGroup[]>(() => {
     })
 })
 
-const modes = computed<AgentInfo[]>(() => agents.value.filter((agent) => agent.mode === "primary" && !agent.hidden))
+const modes = computed<AgentInfo[]>(() => agents.value.filter((item) => item.mode === "primary" && !item.hidden))
 
 const selectedAgentInfo = computed<AgentInfo | undefined>(() =>
-  modes.value.find((agent) => agent.id === selectedAgent.value),
+  modes.value.find((item) => item.id === agent),
 )
 
 const selectedModelInfo = computed<ModelInfo | undefined>(() => {
@@ -112,6 +122,19 @@ const selectedModelInfo = computed<ModelInfo | undefined>(() => {
 
 /** Variant names available for the selected model (reasoning effort, etc.). */
 const selectedModelVariants = computed<string[]>(() => (selectedModelInfo.value?.variants ?? []).map((v) => v.id))
+
+/**
+ * Models that can return an image, alphabetical.
+ *
+ * The auto routers advertise image output but route wherever they like, which is
+ * the wrong kind of surprise for a picture, so they are left out of the picker.
+ */
+const imageModels = computed<ModelInfo[]>(() =>
+  models.value
+    .filter((model) => (model.capabilities?.output ?? []).includes("image"))
+    .filter((model) => !/(^|\/)(auto|auto-beta)$/.test(model.id))
+    .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)),
+)
 
 /** Currently selected variant for the selected model. */
 const selectedVariant = computed<string | undefined>(() => selectedModel.value?.variant)
@@ -127,10 +150,9 @@ function parseModelString(value: ServerConfig["model"]): ModelRef | null {
 
 export function useServer() {
   function applyDefaults() {
-    const cfg = config.value
     const defaults = prefs.value[origin.value ?? ""] ?? {}
-    selectedAgent.value = defaults.agent ?? cfg?.default_agent ?? modes.value[0]?.id ?? "build"
     selectedModel.value = resolveDefaultModel()
+    selectedImageModel.value = defaults.imageModel ?? null
   }
 
   /** Attach the remembered variant (if it is valid for the model). */
@@ -165,11 +187,11 @@ export function useServer() {
     loading.value = true
     error.value = null
 
-    // Apply saved agent/model synchronously so the UI never flashes the default
+    // Apply the saved model synchronously so the UI never flashes the default
     // before the persisted choice loads.
     const saved = prefs.value[instanceOrigin] ?? {}
-    if (saved.agent) selectedAgent.value = saved.agent
     if (saved.model) selectedModel.value = saved.model
+    selectedImageModel.value = saved.imageModel ?? null
 
     try {
       let location = directory ? await client.location({ directory }).catch(() => null) : null
@@ -210,8 +232,8 @@ export function useServer() {
 
   function applySavedPrefs(instanceOrigin: string) {
     const saved = prefs.value[instanceOrigin] ?? {}
-    if (saved.agent) selectedAgent.value = saved.agent
     if (saved.model) selectedModel.value = saved.model
+    selectedImageModel.value = saved.imageModel ?? null
   }
 
   function setDirectory(dir: string) {
@@ -234,13 +256,7 @@ export function useServer() {
     projects.value = []
     selectedDirectory.value = null
     selectedModel.value = null
-  }
-
-  function setAgent(name: string) {
-    selectedAgent.value = name
-    const key = origin.value ?? ""
-    prefs.value = { ...prefs.value, [key]: { ...prefs.value[key], agent: name } }
-    persistPrefs()
+    selectedImageModel.value = null
   }
 
   function setModel(model: ModelRef) {
@@ -260,8 +276,28 @@ export function useServer() {
     persistPrefs()
   }
 
+  /** Remember the image model, or `null` to leave the choice to the tool. */
+  function setImageModel(id: string | null) {
+    selectedImageModel.value = id
+    const key = origin.value ?? ""
+    prefs.value = { ...prefs.value, [key]: { ...prefs.value[key], imageModel: id ?? undefined } }
+    persistPrefs()
+  }
+
   /** The directory that scopes all instance requests (the selected project). */
   const directory = computed(() => selectedDirectory.value ?? locationInfo.value?.directory ?? undefined)
+
+  /**
+   * Re-read the command list.
+   *
+   * Commands are files on disk, so one can appear while the app is running. The
+   * server announces that on its event stream; without this the slash menu would
+   * only ever show what existed when the project was opened.
+   */
+  async function reloadCommands(client: ServerClient, dir?: string) {
+    const list = await client.commands({ directory: dir ?? directory.value }).catch(() => null)
+    if (list) commands.value = list
+  }
 
   return {
     locationInfo,
@@ -276,20 +312,23 @@ export function useServer() {
     error,
     modes,
     providerGroups,
-    selectedAgent,
+    agent,
     selectedAgentInfo,
     selectedModel,
     selectedModelInfo,
     selectedModelVariants,
     selectedVariant,
+    selectedImageModel,
+    imageModels,
     directory,
     load,
+    reloadCommands,
     setDirectory,
     savedDirectory,
     applySavedPrefs,
     reset,
-    setAgent,
     setModel,
     setVariant,
+    setImageModel,
   }
 }

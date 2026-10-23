@@ -19,6 +19,10 @@ import { openRequests } from "@/stores/shortcuts"
 
 const { selectedModelVariants, selectedVariant, setVariant } = useServer()
 
+/** Inside a control group the surrounding pill supplies the border; this is the
+ *  closing end of it. */
+const props = defineProps<{ grouped?: boolean }>()
+
 const open = ref(false)
 const query = ref("")
 const inputRef = ref<unknown>(null)
@@ -89,8 +93,12 @@ watch(
     :open-on-focus="true"
     class="opencode-variant-root"
   >
-    <ComboboxAnchor class="opencode-variant-anchor" title="Reasoning effort / variant (Alt+E)">
-      <Gauge :size="14" class="opencode-variant-icon" />
+    <ComboboxAnchor
+      class="opencode-variant-anchor"
+      :class="{ 'is-grouped': props.grouped }"
+      title="Reasoning effort / variant (Alt+E)"
+    >
+      <Gauge v-if="!props.grouped" :size="14" class="opencode-variant-icon" />
       <ComboboxInput
         ref="inputRef"
         class="opencode-variant-input"
@@ -148,6 +156,22 @@ watch(
 }
 .opencode-variant-anchor:focus-within {
   border-color: var(--accent);
+}
+/* Grouped: the group owns the pill, the segment owns its contents. */
+.opencode-variant-anchor.is-grouped {
+  height: 100%;
+  padding: 0 6px;
+  border: none;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+}
+.opencode-variant-anchor.is-grouped:hover {
+  background: var(--bg-hover);
+}
+.opencode-variant-anchor.is-grouped .opencode-variant-input {
+  /* "Default" is the common value; the segment only needs room for a name. */
+  min-width: 40px;
+  max-width: 90px;
 }
 .opencode-variant-icon {
   color: var(--accent);

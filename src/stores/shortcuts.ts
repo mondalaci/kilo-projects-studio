@@ -20,16 +20,15 @@ export function setHeldModifier(value: ShortcutModifier | null) {
   heldModifier.value = value
 }
 
-export const openRequests = reactive({ model: 0, agent: 0, project: 0, sessions: 0, effort: 0, tools: 0, chats: 0 })
+export const openRequests = reactive({ model: 0, project: 0, sessions: 0, effort: 0, tools: 0, chats: 0 })
 
-export function requestOpen(which: "model" | "agent" | "project" | "sessions" | "effort" | "tools" | "chats") {
+export function requestOpen(which: "model" | "project" | "sessions" | "effort" | "tools" | "chats") {
   openRequests[which] += 1
 }
 
 /** Key codes (layout/modifier independent) for the shortcuts. */
 export const shortcutKeys = {
   model: "KeyM",
-  agent: "KeyA",
   project: "KeyP",
   newChat: "KeyN",
   focusChat: "KeyC",

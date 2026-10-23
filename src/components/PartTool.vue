@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import { Check, ChevronRight, CircleAlert, Terminal } from "lucide-vue-next"
-import type { AssistantToolBlock } from "@/api/types"
+import type { AssistantToolBlock, ToolFileContent } from "@/api/types"
 import { prettyJson, toolSummary } from "@/utils/format"
 import { toolOutputText } from "@/utils/compose"
+import { isDataUrl } from "@/utils/file"
 import { highlightLines } from "@/utils/highlight"
+import { openImage } from "@/stores/lightbox"
 import Spinner from "./Spinner.vue"
 
 const props = defineProps<{ block: AssistantToolBlock }>()
@@ -24,6 +26,21 @@ const output = computed(() => {
   return ""
 })
 const outputText = computed(() => prettyJson(output.value))
+
+/**
+ * Images a tool returned as content.
+ *
+ * Image tools and `read` report a picture as inline bytes — a `data:` URI — so
+ * that is what is rendered here. The saved path is already part of the tool's
+ * text output, and travels in its metadata for later turns to reuse.
+ */
+const images = computed(() => {
+  const content = state.value.status === "completed" || state.value.status === "error" ? state.value.content : undefined
+  return (content ?? [])
+    .filter((item): item is ToolFileContent => item.type === "file" && item.mime.startsWith("image/"))
+    .filter((item) => isDataUrl(item.uri) || /^https?:/.test(item.uri))
+    .map((item) => ({ src: item.uri, label: item.name || "generated image" }))
+})
 
 /**
  * Highlighted HTML for a tool block, or null to render the text as it is.
@@ -65,6 +82,18 @@ const outputHtml = computed(() => (isJson(outputText.value) ? highlightJson(outp
         <CircleAlert v-else :size="14" class="err" />
       </span>
     </button>
+    <div v-if="images.length" class="images">
+      <img
+        v-for="(image, index) in images"
+        :key="index"
+        :src="image.src"
+        :alt="image.label"
+        :title="`${image.label} — click to enlarge`"
+        class="zoomable"
+        loading="lazy"
+        @click="openImage(image.src, image.label)"
+      />
+    </div>
     <div v-show="open" class="body">
       <div class="section">
         <div class="label">Input</div>
@@ -102,6 +131,23 @@ const outputHtml = computed(() => (isJson(outputText.value) ? highlightJson(outp
 }
 .head:hover {
   background: var(--bg-hover);
+}
+/* A picture a tool produced is the point of the call, so it shows without the
+   body being expanded; the JSON behind it stays folded away. */
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+.images img {
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.images img.zoomable {
+  cursor: zoom-in;
 }
 .chev {
   transition: transform 0.15s;
