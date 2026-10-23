@@ -23,6 +23,7 @@
     "lucide-vue-next": "^1.0.0",
     "marked": "^18.0.14",
     "mermaid": "^12.1.0",
+    "opencode-search": "file:../opencode-search",
     "reka-ui": "^2.10.5",
     "vue": "^3.5.43"
   },

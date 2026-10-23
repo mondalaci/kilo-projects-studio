@@ -153,10 +153,10 @@ const modeLabel = computed(() =>
 )
 const modeTitle = computed(() =>
   mode.value === "content"
-    ? "Using the local kilo-search service (FTS5/BM25 over message text)"
+    ? "Using the local content-search service (FTS5/BM25 over message text)"
     : mode.value === "fallback"
-      ? "kilo-search is unreachable — matching conversation titles only"
-      : "Checking the local kilo-search service…",
+      ? "The content-search service is unreachable — matching conversation titles on the server"
+      : "Checking the local content-search service…",
 )
 
 async function open(hit: Hit) {
@@ -239,6 +239,7 @@ function onWindowKeydown(event: KeyboardEvent) {
     <div class="results-head">
       <span class="mode-dot" :class="mode" :title="modeTitle"></span>
       <span class="heading">{{ heading }}</span>
+      <span class="mode-label" :class="mode" :title="modeTitle">{{ modeLabel }}</span>
       <span v-if="loading" class="loading">searching…</span>
       <span v-else-if="hits.length" class="count">{{ hits.length }}</span>
     </div>
@@ -382,6 +383,19 @@ function onWindowKeydown(event: KeyboardEvent) {
 }
 .mode-dot.fallback {
   background: var(--accent);
+}
+.mode-label {
+  flex: none;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.mode-label.content {
+  color: #35c06a;
+}
+.mode-label.fallback {
+  color: var(--accent);
 }
 .results {
   flex: 1;

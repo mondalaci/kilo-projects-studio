@@ -1,6 +1,6 @@
 import { ServerClient, ServerError, type Credentials } from "./client"
 
-export type ServerProduct = "kilo" | "opencode" | "unknown"
+export type ServerProduct = "opencode" | "unknown"
 
 export interface InstanceInfo {
   id: string
@@ -26,8 +26,6 @@ export interface DiscoverOptions {
  */
 export const DEFAULT_PORTS = [
   4097, 4096, 4098, 4099, 4100, 4101, 4102, 4103, 4104, 4105, 4110, 4120, 3000, 3456, 5000, 8000, 8080,
-  // Uncommon high port used by the bundled PM2 server (ecosystem.config.cjs).
-  27183,
 ]
 
 /** The port a bare address or `host:port` with no port defaults to. */

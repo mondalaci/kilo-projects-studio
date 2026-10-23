@@ -79,8 +79,7 @@ requires HTTP Basic authentication; the password lives in the server's
 `service.json` (its default username is `opencode`). On first launch the app scans
 local ports and shows the instance picker — `4097` first, then the legacy
 `4096` — asking for the password. After that the last server is restored
-automatically. Discovery also probes the high port `27183` used by the reference
-project's PM2 setup.
+automatically.
 
 Other scripts: `npm run dev` (Vite only, for UI work in a browser),
 `npm run typecheck`, `npm run preview`.
@@ -104,17 +103,17 @@ cp public/opencode-projects-studio.example.json public/opencode-projects-studio.
 `defaultAgent` preselects a primary agent on load, as long as the server exposes
 it; a `?agent=` GET param still takes precedence.
 
-Conversation search (`Alt`+`F`) uses the optional `kilo-search` service in
-`search-server/` (a small Bun FTS5/BM25 index over message text, listening on
-`127.0.0.1:27184`) when it is running, and falls back to server-side title search
-when it is not.
+Conversation search (`Alt`+`F`) uses the shared **opencode-search** service
+(a small Bun FTS5/BM25 index over message text, listening on `127.0.0.1:27184`)
+when it is running, and falls back to the server's own title search when it is
+not. The sidebar header shows which one answered ("Content search" or
+"Fallback · titles").
 
-> `kilo-search` still reads the **Kilo** database
-> (`~/.local/share/kilo/kilo.db`) rather than opencode's
-> (`~/.local/share/opencode/opencode.db`), and its queries are written against
-> Kilo's tables. Against an opencode server it therefore answers from the wrong
-> store — worse than being absent, because the fallback never runs. Repointing and
-> adapting it, or retiring it, is outstanding.
+The service lives in its own repository (`../opencode-search`) and is shared with
+`kilo-web-chat`: one process indexes several databases ("sources") and tags every
+result with its origin. This app queries the `opencode` source, i.e.
+`~/.local/share/opencode/opencode.db`. Start it with
+`pm2 start ecosystem.config.cjs` from that repository.
 
 ## How it is put together
 

@@ -21,9 +21,7 @@ onMounted(() => {
 })
 
 function productLabel(product: InstanceInfo["product"]) {
-  if (product === "kilo") return "Kilo Code"
-  if (product === "opencode") return "opencode"
-  return "Server"
+  return product === "opencode" ? "opencode" : "Server"
 }
 
 async function open(info: InstanceInfo) {

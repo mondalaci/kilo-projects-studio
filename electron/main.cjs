@@ -1,9 +1,10 @@
 /**
  * Electron main process.
  *
- * The renderer is the Kilo web chat UI (Vue + Vite). Its only Electron-specific
- * dependency is the git bridge, so everything else keeps working when the same
- * build is opened in a plain browser (that bridge is simply unavailable there).
+ * The renderer is the studio UI (Vue + Vite), descended from the kilo-web-chat
+ * renderer. Its only Electron-specific dependency is the git bridge, so
+ * everything else keeps working when the same build is opened in a plain
+ * browser (that bridge is simply unavailable there).
  */
 const path = require("node:path")
 const fs = require("node:fs")
