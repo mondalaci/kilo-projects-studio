@@ -278,10 +278,15 @@ When the window is not focused (or is hidden) and a conversation starts wanting
 the user — blocked, or finished with the result unopened — the app plays a short
 two-note chime and, for a block, raises a desktop notification. A conversation
 that is merely *working* never announces itself, nothing already announced
-repeats, and Mute silences both the chime and the notifications. The chime is
-synthesised with the Web Audio API rather than shipped as a file, and Electron
-runs with `autoplayPolicy: "no-user-gesture-required"` so it can sound without a
-click first.
+repeats, and Mute silences both the chime and the notifications.
+
+"Blocked" covers two different asks, so they do not arrive sounding alike: a
+question waiting on an answer gets the lower, growling figure, and a permission
+or a finished turn gets the rising one. The chimes are synthesised with the Web
+Audio API rather than shipped as files — they are the ones picked out of
+[`sound-lab/index.html`](sound-lab/index.html), at the gains that lab measured as
+equally loud — and Electron runs with `autoplayPolicy: "no-user-gesture-required"`
+so they can sound without a click first.
 
 ### How the state feed works
 

@@ -1,9 +1,15 @@
 import { computed, ref, watch } from "vue"
 import { desktopBridge, type TrayMenuItem } from "@/api/desktop"
 import { useSessionState } from "./sessionState"
-import { playAttentionChime, prepareAudio } from "@/utils/chime"
+import { playAttentionChime, playQuestionChime, prepareAudio } from "@/utils/chime"
 import { trayIconDataURL } from "@/utils/trayIcon"
-import { badgeText, shouldAnnounce, trayTooltip, type ConversationState } from "@/utils/sessionState"
+import {
+  QUESTION_REASON,
+  badgeText,
+  shouldAnnounce,
+  trayTooltip,
+  type ConversationState,
+} from "@/utils/sessionState"
 
 /**
  * The tray icon and the attention chime.
@@ -139,7 +145,11 @@ export function useTray() {
         ) {
           continue
         }
-        playAttentionChime()
+        // A question parks the turn on an answer, a permission on a grant, and a
+        // finished turn on neither: the reason is what separates them, so the
+        // three do not all arrive with the same sound.
+        if (conversation.reason === QUESTION_REASON) playQuestionChime()
+        else playAttentionChime()
         if (conversation.state === "blocked") {
           void bridge?.tray?.notify({
             title: `${project.name} needs you`,

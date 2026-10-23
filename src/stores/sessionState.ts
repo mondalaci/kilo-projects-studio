@@ -5,6 +5,7 @@ import { useProjects } from "./projects"
 import { useServer } from "./server"
 import { useSessions } from "./sessions"
 import {
+  QUESTION_REASON,
   conversationState,
   countsAsUnread,
   rollupProjects,
@@ -144,7 +145,7 @@ export function useSessionState() {
         const form = (data.form ?? data) as unknown as FormInfo
         if (form?.id && form.sessionID) {
           requestSession.set(form.id, form.sessionID)
-          setBlocked(form.sessionID, "question")
+          setBlocked(form.sessionID, QUESTION_REASON)
         }
         break
       }
@@ -185,7 +186,7 @@ export function useSessionState() {
       for (const form of forms) {
         if (!form?.id || !form.sessionID) continue
         requestSession.set(form.id, form.sessionID)
-        blocked.set(form.sessionID, "question")
+        blocked.set(form.sessionID, QUESTION_REASON)
       }
       const next = { ...signals.value }
       for (const [sessionID, signal] of Object.entries(next)) {

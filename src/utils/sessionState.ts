@@ -17,6 +17,15 @@ export type ConversationState = "blocked" | "working" | "done" | "idle"
 /** Most actionable first; the index doubles as the rank. */
 export const STATE_PRECEDENCE: ConversationState[] = ["blocked", "working", "done", "idle"]
 
+/**
+ * The reason a conversation shows while an agent question waits for an answer.
+ *
+ * "Blocked" covers both a question and a permission request, so the reason is
+ * what tells the two apart — the chime keys off it, and so does anything else
+ * that wants to know which kind of interruption this is.
+ */
+export const QUESTION_REASON = "question"
+
 /** Raw signals for one conversation. */
 export interface ConversationSignals {
   /** Pending permission request or question: the agent needs a human. */
