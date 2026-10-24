@@ -412,8 +412,11 @@ log, because settings will not persist for that run.
   panel still uses the desktop's own `git` rather than the server's `/api/vcs`.
 - Questions are surfaced as v2 **forms** (`/api/form`), and tool calls are streamed
   from the `session.tool.*` events. A question card carries only what is chosen —
-  options and checkboxes — while a free-form answer is typed into the composer,
-  which sends it as the reply; `Alt`+`X` withdraws a question instead.
+  options and a Yes/No — while a free-form answer is typed into the composer,
+  which sends it as the reply. The card answers itself the moment its last choice
+  lands, and keeps a Submit button only when nothing on it can end the question (a
+  multiple choice, or a step finished in a browser); `Alt`+`X` withdraws a question
+  instead.
 - If `ELECTRON_RUN_AS_NODE` is set in the environment, Electron behaves as plain
   Node; `npm run app:dev` clears it for the child process, and the main process
   exits with an explanatory message if it is still set.

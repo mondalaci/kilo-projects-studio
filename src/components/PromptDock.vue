@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { reactive } from "vue"
 import { Check, HelpCircle, ShieldAlert } from "lucide-vue-next"
-import type { FormDetail, FormField } from "@/api/types"
+import type { FormDetail, FormField, FormOption } from "@/api/types"
 import { useApp } from "@/stores/app"
-import { fieldDefault, hasCardControls, normalizeValue, visibleFields } from "@/utils/form"
+import { answersSettle, fieldDefault, needsSubmit, normalizeValue, visibleFields } from "@/utils/form"
 
 const app = useApp()
 const { pendingPermissions, pendingForms } = app.chat
@@ -12,40 +12,62 @@ const { replyPermission, replyForm } = app
 /** Form answers, keyed `${formID}:${fieldKey}` then normalised on submit. */
 const answers = reactive<Record<string, unknown>>({})
 
-function fieldValue(formID: string, field: FormField): unknown {
-  const key = `${formID}:${field.key}`
+/** Forms whose answer is already on its way, so a click that lands twice sends one. */
+const sending = new Set<string>()
+
+function fieldValue(form: FormDetail, field: FormField): unknown {
+  const key = `${form.id}:${field.key}`
   if (key in answers) return answers[key]
+  // An untouched Yes/No holds no answer: "no" is a choice, not a starting point.
+  if (field.type === "boolean") return undefined
   return fieldDefault(field)
 }
 
-function setField(formID: string, field: FormField, value: unknown) {
-  answers[`${formID}:${field.key}`] = value
+function setField(form: FormDetail, field: FormField, value: unknown) {
+  answers[`${form.id}:${field.key}`] = value
+}
+
+/** The buttons a field puts on the card: its own options, or a Yes/No pair. */
+function choices(field: FormField): FormOption[] {
+  if (field.options?.length) return field.options
+  if (field.type === "boolean") return [{ value: "true", label: "Yes" }, { value: "false", label: "No" }]
+  return []
 }
 
 /** An option click: a toggle when several may be picked, a choice when one may. */
-function choose(formID: string, field: FormField, value: string) {
+function choose(form: FormDetail, field: FormField, value: string) {
+  const key = `${form.id}:${field.key}`
   if (field.type === "multiselect") {
-    const key = `${formID}:${field.key}`
     const current = Array.isArray(answers[key]) ? (answers[key] as string[]) : []
     const pos = current.indexOf(value)
     answers[key] = pos === -1 ? [...current, value] : current.filter((item) => item !== value)
-    return
+  } else {
+    setField(form, field, field.type === "boolean" ? value === "true" : value)
   }
-  setField(formID, field, field.type === "boolean" ? value === "true" : value)
+  // The click that lands the last choice is the form's send, not just a pick.
+  submitIfSettled(form)
 }
 
-function isPicked(formID: string, field: FormField, value: string): boolean {
-  const current = fieldValue(formID, field)
+function isPicked(form: FormDetail, field: FormField, value: string): boolean {
+  const current = fieldValue(form, field)
   if (field.type === "multiselect") return Array.isArray(current) && (current as string[]).includes(value)
   return current !== undefined && current !== null && String(current) === value
 }
 
+/** Answer a form the moment its last choice lands: the card keeps no Submit button. */
+function submitIfSettled(form: FormDetail) {
+  if (answersSettle(form, (field) => fieldValue(form, field))) submit(form)
+}
+
 function submit(form: FormDetail) {
+  if (sending.has(form.id)) return
   const answer: Record<string, unknown> = {}
   for (const field of visibleFields(form)) {
-    answer[field.key] = normalizeValue(field, fieldValue(form.id, field))
+    answer[field.key] = normalizeValue(field, fieldValue(form, field))
   }
-  void replyForm(form.sessionID, form.id, answer)
+  sending.add(form.id)
+  // A reply that fails leaves the form pending, so it may be answered again.
+  void replyForm(form.sessionID, form.id, answer).catch(() => sending.delete(form.id))
 }
 </script>
 
@@ -78,32 +100,26 @@ function submit(form: FormDetail) {
 
         <!-- The card carries what is *chosen*; anything free-form is answered by
              typing in the composer, so no question grows a second input area. -->
-        <div v-if="field.options?.length" class="options">
+        <div v-if="choices(field).length" class="options" :class="{ row: field.type === 'boolean' }">
           <button
-            v-for="option in field.options"
+            v-for="option in choices(field)"
             :key="option.value"
             class="option"
-            :class="{ picked: isPicked(form.id, field, option.value) }"
-            @click="choose(form.id, field, option.value)"
+            :class="{ picked: isPicked(form, field, option.value) }"
+            @click="choose(form, field, option.value)"
           >
-            <span class="option-mark"><Check v-if="isPicked(form.id, field, option.value)" :size="14" /></span>
+            <span class="option-mark"><Check v-if="isPicked(form, field, option.value)" :size="14" /></span>
             <span class="option-body">
               <span class="option-label">{{ option.label }}</span>
               <span v-if="option.description" class="option-desc">{{ option.description }}</span>
             </span>
           </button>
         </div>
-
-        <label v-else-if="field.type === 'boolean'" class="checkbox">
-          <input
-            type="checkbox"
-            :checked="fieldValue(form.id, field) === true"
-            @change="setField(form.id, field, ($event.target as HTMLInputElement).checked)"
-          />
-          <span>{{ field.title || field.key }}</span>
-        </label>
       </div>
-      <div v-if="hasCardControls(form)" class="actions">
+
+      <!-- A form that keeps its button: nothing on the card ends a multiple
+           choice or a browser step, so those are sent by hand. -->
+      <div v-if="needsSubmit(form)" class="actions">
         <button class="primary" @click="submit(form)">Submit</button>
       </div>
     </div>
@@ -215,6 +231,9 @@ function submit(form: FormDetail) {
   flex-direction: column;
   gap: 6px;
 }
+.options.row {
+  flex-direction: row;
+}
 .option {
   display: flex;
   flex-direction: row;
@@ -253,11 +272,5 @@ function submit(form: FormDetail) {
 .option-desc {
   font-size: 11.5px;
   color: var(--text-muted);
-}
-.checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
 }
 </style>

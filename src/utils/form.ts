@@ -4,7 +4,7 @@ import type { FormDetail, FormField } from "@/api/types"
  * Helpers shared by the question card and the composer.
  *
  * A question is delivered as a v2 form. The card owns everything that is
- * *chosen* — options, checkboxes — while anything free-form is typed into the
+ * *chosen* — options, a Yes/No — while anything free-form is typed into the
  * usual composer, so a question never grows a second input area.
  */
 
@@ -34,7 +34,7 @@ export function normalizeValue(field: FormField, value: unknown): unknown {
  * Whether a line typed in the composer can answer this field.
  *
  * A field that offers options only takes one of them — unless it also invites a
- * custom answer — while a checkbox, a multiple choice or an external link has
+ * custom answer — while a Yes/No, a multiple choice or an external link has
  * nothing a typed line could fill.
  */
 export function acceptsText(field: FormField): boolean {
@@ -43,9 +43,43 @@ export function acceptsText(field: FormField): boolean {
   return true
 }
 
-/** Whether the card itself has anything to click, so it needs its Submit button. */
-export function hasCardControls(form: FormDetail): boolean {
-  return visibleFields(form).some((field) => Boolean(field.options?.length) || field.type === "boolean")
+/**
+ * Whether the card should answer this form on its own.
+ *
+ * True once every control it drew has an answer, so the click that lands the
+ * last choice sends the form instead of waiting for a Submit press.
+ */
+export function answersSettle(form: FormDetail, valueOf: (field: FormField) => unknown): boolean {
+  const fields = visibleFields(form)
+  return fields.length > 0 && fields.every((field) => settled(field, valueOf(field)))
+}
+
+/**
+ * Whether one field is done with, for a card that answers only what is chosen.
+ *
+ * A field offering options or a Yes/No waits for that pick; anything merely
+ * typed belongs to the composer, which is not the card's to wait on.
+ */
+function settled(field: FormField, value: unknown): boolean {
+  if (hasNoEnd(field)) return false
+  if (field.options?.length || field.type === "boolean") return hasAnswer(field, value)
+  return true
+}
+
+/** Whether a control the card drew has an answer: false is one, so an untouched Yes/No has none. */
+function hasAnswer(field: FormField, value: unknown): boolean {
+  if (field.type === "boolean") return typeof value === "boolean"
+  return value !== undefined && value !== null && String(value) !== ""
+}
+
+/** The fields that leave a form no click to end on: a multiple choice and a browser step. */
+function hasNoEnd(field: FormField): boolean {
+  return field.type === "multiselect" || field.type === "external"
+}
+
+/** Whether the card keeps its Submit button: a form holding a field with no end to click. */
+export function needsSubmit(form: FormDetail): boolean {
+  return visibleFields(form).some(hasNoEnd)
 }
 
 /**
