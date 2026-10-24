@@ -3,6 +3,7 @@ import type { ServerClient } from "@/api/client"
 import { normalizeOrigin } from "@/api/discovery"
 import type {
   AgentInfo,
+  CommandInfo,
   LocationInfo,
   ModelInfo,
   ModelRef,
@@ -62,6 +63,12 @@ const agents = ref<AgentInfo[]>([])
 const providers = ref<ProviderInfo[]>([])
 const models = ref<ModelInfo[]>([])
 const projects = ref<ProjectInfo[]>([])
+/**
+ * The slash commands the server can run here, as the composer's `/` menu lists
+ * them. Kept beside the rest of the per-project catalogue because it is
+ * refreshed exactly when they are.
+ */
+const commands = ref<CommandInfo[]>([])
 const selectedDirectory = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -201,18 +208,20 @@ export function useServer() {
       locationInfo.value = location
       selectedDirectory.value = dir ?? null
 
-      const [cfg, agentList, providerList, modelList, projectList] = await Promise.all([
+      const [cfg, agentList, providerList, modelList, projectList, commandList] = await Promise.all([
         client.config({ directory: dir }).catch(() => null),
         client.agents({ directory: dir }).catch(() => [] as AgentInfo[]),
         client.providers({ directory: dir }).catch(() => [] as ProviderInfo[]),
         client.models({ directory: dir }).catch(() => [] as ModelInfo[]),
         client.projects().catch(() => [] as ProjectInfo[]),
+        client.commands({ directory: dir }).catch(() => [] as CommandInfo[]),
       ])
       config.value = cfg
       agents.value = agentList
       providers.value = providerList
       models.value = modelList
       projects.value = projectList
+      commands.value = commandList
       // Don't clobber the current agent/model when only switching project.
       if (changedOrigin || !selectedModel.value) applyDefaults()
     } catch (err) {
@@ -249,6 +258,7 @@ export function useServer() {
     providers.value = []
     models.value = []
     projects.value = []
+    commands.value = []
     selectedDirectory.value = null
     selectedModel.value = null
     selectedImageModel.value = null
@@ -289,6 +299,7 @@ export function useServer() {
     providers,
     models,
     projects,
+    commands,
     selectedDirectory,
     loading,
     error,

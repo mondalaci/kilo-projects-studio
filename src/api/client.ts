@@ -1,10 +1,15 @@
 import type {
   AgentInfo,
+  CommandInfo,
   DataEnvelope,
   FormDetail,
   FormInfo,
+  IntegrationAttempt,
+  IntegrationAttemptStatus,
+  IntegrationInfo,
   ListEnvelope,
   LocationInfo,
+  McpServer,
   ModelInfo,
   ModelRef,
   PermissionRequest,
@@ -187,6 +192,109 @@ export class ServerClient {
     return res?.data ?? []
   }
 
+  /**
+   * The slash commands registered for a project.
+   *
+   * These are the ones the server can run itself — its own built-ins, the
+   * project's `commands/` files and its MCP prompts — and the only names
+   * `runCommand` below accepts.
+   */
+  async commands(opts: RequestOptions = {}): Promise<CommandInfo[]> {
+    const res = await this.request<DataEnvelope<CommandInfo[]>>("/api/command", opts)
+    return res?.data ?? []
+  }
+
+  /* ------------------------------ mcp servers ------------------------------ */
+
+  /** The MCP servers of a project, with the connection state of each. */
+  async mcpServers(opts: RequestOptions = {}): Promise<McpServer[]> {
+    const res = await this.request<DataEnvelope<McpServer[]>>("/api/mcp", opts)
+    return res?.data ?? []
+  }
+
+  /** Open a server, which is what a server waiting on a login can never do. */
+  async mcpConnect(server: string, opts: RequestOptions = {}): Promise<void> {
+    await this.request<unknown>(`/api/experimental/mcp/${encodeURIComponent(server)}/connect`, {
+      ...opts,
+      method: "POST",
+    })
+  }
+
+  async mcpDisconnect(server: string, opts: RequestOptions = {}): Promise<void> {
+    await this.request<unknown>(`/api/experimental/mcp/${encodeURIComponent(server)}/disconnect`, {
+      ...opts,
+      method: "POST",
+    })
+  }
+
+  /* ------------------------------ integrations ----------------------------- */
+
+  /**
+   * An integration and the ways it can be connected.
+   *
+   * A remote MCP server that wants a login registers one of its own, so this is
+   * how the sign-in method for such a server is found.
+   */
+  async integration(integrationID: string, opts: RequestOptions = {}): Promise<IntegrationInfo | null> {
+    const res = await this.request<DataEnvelope<IntegrationInfo>>(
+      `/api/integration/${encodeURIComponent(integrationID)}`,
+      opts,
+    )
+    return res?.data ?? null
+  }
+
+  /**
+   * Begin an OAuth sign-in.
+   *
+   * The server listens on its own loopback port for the provider's callback, so
+   * the returned `url` only has to be opened: the attempt completes without the
+   * client's help unless it comes back in `code` mode.
+   */
+  async oauthConnect(
+    integrationID: string,
+    methodID: string,
+    opts: RequestOptions = {},
+  ): Promise<IntegrationAttempt | null> {
+    const res = await this.request<DataEnvelope<IntegrationAttempt>>(
+      `/api/integration/${encodeURIComponent(integrationID)}/connect/oauth`,
+      { ...opts, method: "POST", body: { methodID } },
+    )
+    return res?.data ?? null
+  }
+
+  async oauthStatus(
+    integrationID: string,
+    attemptID: string,
+    opts: RequestOptions = {},
+  ): Promise<IntegrationAttemptStatus | null> {
+    const res = await this.request<DataEnvelope<IntegrationAttemptStatus>>(
+      `/api/integration/${encodeURIComponent(integrationID)}/connect/oauth/${encodeURIComponent(attemptID)}`,
+      opts,
+    )
+    return res?.data ?? null
+  }
+
+  /** Hand back the code a `code`-mode attempt is waiting on. */
+  async oauthComplete(
+    integrationID: string,
+    attemptID: string,
+    code: string | null,
+    opts: RequestOptions = {},
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/api/integration/${encodeURIComponent(integrationID)}/connect/oauth/${encodeURIComponent(attemptID)}/complete`,
+      { ...opts, method: "POST", body: { code } },
+    )
+  }
+
+  /** Give up on an attempt, so the server stops listening for its callback. */
+  async oauthCancel(integrationID: string, attemptID: string, opts: RequestOptions = {}): Promise<void> {
+    await this.request<unknown>(
+      `/api/integration/${encodeURIComponent(integrationID)}/connect/oauth/${encodeURIComponent(attemptID)}`,
+      { ...opts, method: "DELETE" },
+    )
+  }
+
   /* -------------------------------- sessions -------------------------------- */
 
   async listSessions(
@@ -328,6 +436,26 @@ export class ServerClient {
 
   setAgent(sessionID: string, agent: string, opts: RequestOptions = {}) {
     return this.request<unknown>(`/api/session/${sessionID}/agent`, { ...opts, method: "POST", body: { agent } })
+  }
+
+  /**
+   * Run a slash command the server knows.
+   *
+   * What the command expands into is the server's business: this hands over the
+   * name and the argument text, which the template's `$ARGUMENTS` and its
+   * positional placeholders pick up.
+   */
+  runCommand(
+    sessionID: string,
+    input: { name: string; text: string; files?: PromptInput["files"]; delivery?: "steer" | "queue" },
+    opts: RequestOptions = {},
+  ) {
+    return this.request<unknown>(`/api/session/${sessionID}/command`, { ...opts, method: "POST", body: input })
+  }
+
+  /** Compact the conversation, as the TUI's `/compact` does. */
+  compact(sessionID: string, opts: RequestOptions = {}) {
+    return this.request<unknown>(`/api/session/${sessionID}/compact`, { ...opts, method: "POST" })
   }
 
   /* ------------------------- permissions and forms -------------------------- */

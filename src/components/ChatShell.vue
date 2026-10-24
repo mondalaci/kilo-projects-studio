@@ -7,6 +7,7 @@ import SourceControl from "./SourceControl.vue"
 import DiffViewer from "./DiffViewer.vue"
 import MessageThread from "./MessageThread.vue"
 import Composer from "./Composer.vue"
+import McpDialog from "./McpDialog.vue"
 import PromptDock from "./PromptDock.vue"
 import FileViewer from "./FileViewer.vue"
 import ImageLightbox from "./ImageLightbox.vue"
@@ -397,6 +398,8 @@ onBeforeUnmount(() => {
     <div class="scm-host">
       <SourceControl />
     </div>
+
+    <McpDialog />
   </div>
 </template>
 

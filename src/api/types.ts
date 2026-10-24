@@ -364,6 +364,54 @@ export interface CommandInfo {
   description?: string
 }
 
+/* ------------------------------ mcp servers ------------------------------ */
+
+export type McpStatus =
+  | { status: "connected" }
+  | { status: "pending" }
+  | { status: "disabled" }
+  | { status: "failed"; error: string }
+  | { status: "needs_auth"; error: string }
+
+export interface McpServer {
+  name: string
+  status: McpStatus
+  /** Present when the server signs in through an integration of its own. */
+  integrationID?: string
+}
+
+/* ------------------------------ integrations ----------------------------- */
+
+export type IntegrationMethod =
+  | { type: "oauth"; id: string; label: string }
+  | { type: "command"; id: string; label: string; command: string[] }
+  | { type: "key"; label?: string; form?: unknown }
+  | { type: "external"; id: string; label: string; form?: unknown }
+  | { type: "env"; names: string[] }
+
+export interface IntegrationInfo {
+  id: string
+  name: string
+  metadata?: Record<string, unknown>
+  methods: IntegrationMethod[]
+  connections: unknown[]
+}
+
+export interface IntegrationAttempt {
+  attemptID: string
+  url: string
+  instructions: string
+  /** `auto` completes on the server's own callback; `code` waits for a paste. */
+  mode: "auto" | "code"
+  time: { created: number; expires: number }
+}
+
+export type IntegrationAttemptStatus =
+  | { status: "pending"; time: { created: number; expires: number } }
+  | { status: "complete"; time: { created: number; expires: number } }
+  | { status: "failed"; message: string; time: { created: number; expires: number } }
+  | { status: "expired"; time: { created: number; expires: number } }
+
 export interface ServerConfig {
   $schema?: string
   model?: string | { providerID: string; model: string; variant?: string }

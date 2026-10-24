@@ -226,6 +226,33 @@ export function useApp() {
     await chat.abort(client, sessionID, server.directory.value)
   }
 
+  /**
+   * Hand a slash command to the server.
+   *
+   * A command belongs to a conversation, so an empty pane gets one first —
+   * exactly as `sendMessage` does — and the command then expands into the
+   * prompt that opens it.
+   */
+  async function runCommand(name: string, text: string, files: FilePartInput[] = []) {
+    const client = connection.client.value
+    if (!client) return
+    let sessionID = sessions.currentID.value
+    if (!sessionID) {
+      const session = await newChat()
+      if (!session) return
+      sessionID = session.id
+    }
+    await chat.runCommand(client, sessionID, { name, text, files }, server.directory.value)
+  }
+
+  /** Compact the open conversation, as the TUI's `/compact` does. */
+  async function compact() {
+    const client = connection.client.value
+    const sessionID = sessions.currentID.value
+    if (!client || !sessionID) return
+    await chat.compact(client, sessionID, server.directory.value)
+  }
+
   async function archiveSession(sessionID: string, directory?: string) {
     const client = connection.client.value
     if (!client) return
@@ -334,6 +361,8 @@ export function useApp() {
     openInitialSession,
     newChat,
     sendMessage,
+    runCommand,
+    compact,
     abort,
     archiveSession,
     openArchive,

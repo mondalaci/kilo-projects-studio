@@ -359,6 +359,59 @@ export function useChat() {
   }
 
   /**
+   * Run a slash command the server knows.
+   *
+   * There is no message to place here: the server expands the command into one
+   * of its own and it arrives on the event stream like any other turn. The turn
+   * is marked busy for the same reason a prompt is — the stop button has to be
+   * armed the moment the command starts working. The command's own agent and
+   * model are its business, so unlike `send` nothing is pushed onto the session.
+   */
+  async function runCommand(
+    client: ServerClient,
+    sessionID: string,
+    input: { name: string; text: string; files?: SendInput["files"] },
+    directory?: string,
+  ) {
+    sending.value = true
+    error.value = null
+    scrollToBottomRequest.value++
+    try {
+      await withdrawForms(client, sessionID, directory)
+      await client.runCommand(
+        sessionID,
+        {
+          name: input.name,
+          text: input.text,
+          files: input.files?.map((file) => ({ uri: file.url, name: file.filename })),
+        },
+        { directory },
+      )
+      status.value = { type: "busy" }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      sending.value = false
+    }
+  }
+
+  /** Compact the conversation, as the TUI's `/compact` does. */
+  async function compact(client: ServerClient, sessionID: string, directory?: string) {
+    sending.value = true
+    error.value = null
+    try {
+      await client.compact(sessionID, { directory })
+      status.value = { type: "busy" }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      sending.value = false
+    }
+  }
+
+  /**
    * Stop the turn. A run parked on a question or a permission prompt is idle as
    * far as the server is concerned, so interrupting would cancel nothing: the
    * asks themselves are what hold it. Withdraw them first — the tool call then
@@ -777,6 +830,8 @@ export function useChat() {
     open,
     reconcile,
     send,
+    runCommand,
+    compact,
     abort,
     replyPermission,
     replyForm,

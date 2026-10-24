@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue"
 import { ArrowUp, FileText, Paperclip, Square, TriangleAlert, X } from "lucide-vue-next"
+import SlashMenu from "./SlashMenu.vue"
 import ShortcutBadge from "./ShortcutBadge.vue"
 import ImageModelSelector from "./ImageModelSelector.vue"
 import ModelSelector from "./ModelSelector.vue"
@@ -8,12 +9,35 @@ import VariantSelector from "./VariantSelector.vue"
 import { useApp } from "@/stores/app"
 import { addFile, attachments, clearAttachments, composerFocusRequest, draft, removeAttachment } from "@/stores/draft"
 import { useServer } from "@/stores/server"
+import { useMcp } from "@/stores/mcp"
+import { requestOpen } from "@/stores/shortcuts"
+import { openSearch } from "@/stores/search"
+import { theme, toggleTheme } from "@/theme"
+import {
+  SLASH_MENU_ROWS,
+  expandSlashCommands,
+  parseSlash,
+  rankSlashCommands,
+  slashQuery,
+  type SlashCommand,
+} from "@/utils/slash"
 import { acceptsText, answerFromText, visibleFields } from "@/utils/form"
 
 const app = useApp()
 const { sending, isBusy, awaitingUser, pendingForms } = app.chat
-const { abort, sendMessage, replyForm } = app
-const { imageModels, selectedModelInfo, selectedModelVariants } = useServer()
+const { abort, compact, newChat, renameSession, replyForm, runCommand, sendMessage } = app
+const { commands, directory, imageModels, selectedModelInfo, selectedModelVariants } = useServer()
+const mcp = useMcp()
+
+/**
+ * Open the MCP servers dialog, which is the one command here that needs the
+ * server rather than just the UI.
+ */
+function openMcpServers() {
+  const client = app.connection.client.value
+  if (!client) return
+  mcp.show(client, directory.value ?? undefined)
+}
 
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -45,6 +69,188 @@ const answerableForm = computed(() =>
   pendingForms.value.find((form) => visibleFields(form).some(acceptsText)),
 )
 const placeholder = computed(() => (answerableForm.value ? "Type your answer…" : ""))
+
+/* ---------------------------- slash commands ----------------------------- */
+
+/**
+ * The commands this app runs itself, mirroring the TUI's own `/` list.
+ *
+ * Only the ones that mean something here: the TUI's `/editor`, `/worktrees`,
+ * `/plugins` and friends have no counterpart in this app, so they are left out
+ * rather than listed and then refused.
+ */
+const localCommands = computed<SlashCommand[]>(() => [
+  { display: "/new", description: "Start a new conversation", run: () => newChat() },
+  { display: "/models", description: "Switch model", run: () => requestOpen("model") },
+  {
+    display: "/sessions",
+    description: "Show this project's conversations",
+    aliases: ["resume", "continue"],
+    run: () => requestOpen("chats"),
+  },
+  { display: "/search", description: "Search conversations", run: () => openSearch() },
+  { display: "/mcps", description: "MCP servers", run: () => openMcpServers() },
+  // The one command of this app's own that takes an argument, as the TUI's
+  // `/rename <title>` does: `run` is handed the text typed after the name.
+  { display: "/rename", description: "Rename this conversation", insert: true, run: renameCurrent },
+  { display: "/compact", description: "Compact the conversation", run: () => compact() },
+  {
+    display: "/theme",
+    description: `Switch to ${theme.value === "dark" ? "light" : "dark"} mode`,
+    aliases: ["themes"],
+    run: () => toggleTheme(),
+  },
+  {
+    display: "/clear",
+    description: "Clear the draft",
+    run: () => {
+      draft.value = ""
+    },
+  },
+  // The TUI only offers its variant command when the model has variants to
+  // offer; the same rule keeps the row out of the list here.
+  ...(selectedModelVariants.value.length
+    ? [
+        {
+          display: "/variants",
+          description: "Switch model variant",
+          aliases: ["thinking", "effort"],
+          run: () => requestOpen("effort"),
+        },
+      ]
+    : []),
+])
+
+/**
+ * The server's commands, as rows.
+ *
+ * Always inserted, never run from here: what a command expands to is the
+ * server's business, and the text typed after it is its argument.
+ */
+const serverCommands = computed<SlashCommand[]>(() =>
+  commands.value.map((command) => ({
+    display: `/${command.name}`,
+    description: command.description,
+    insert: true,
+  })),
+)
+
+/** Every row the menu can show, aliases and all. */
+const slashRows = computed(() => expandSlashCommands([...localCommands.value, ...serverCommands.value]))
+
+/** The filter text while the caret sits inside a leading `/` token. */
+const slash = ref<string | null>(null)
+/** Index of the highlighted row, into `slashItems`. */
+const slashSelected = ref(0)
+const menuOpen = computed(() => slash.value !== null)
+const slashItems = computed(() => rankSlashCommands(slash.value ?? "", slashRows.value))
+
+/**
+ * Re-read the menu from the caret.
+ *
+ * The menu follows the caret, so every input, click and arrow key has to ask
+ * the question again: is the caret still inside a leading `/` token? A query
+ * that actually changed restarts the highlight, while a caret that moved within
+ * the same text leaves it where it was.
+ */
+function syncMenu() {
+  const el = textarea.value
+  if (!el) return
+  const next = slashQuery(el.value.slice(0, el.selectionStart ?? 0)) ?? null
+  if (next === slash.value) return
+  slash.value = next
+  slashSelected.value = 0
+}
+
+/** Walk the highlight, wrapping at both ends. */
+function moveSelection(delta: number) {
+  const count = slashItems.value.length
+  if (!count) return
+  const next = (slashSelected.value + delta) % count
+  slashSelected.value = next < 0 ? next + count : next
+}
+
+/**
+ * Take a row.
+ *
+ * A row that only writes a command into the prompt leaves the caret after it,
+ * so its arguments can be typed; one that acts on its own runs instead. Either
+ * way the typed `/query` is consumed — a picker opened from `/models` must not
+ * leave the word behind in the box.
+ */
+function acceptCommand(index = slashSelected.value) {
+  const choice = slashItems.value[index]
+  if (!choice) return
+  slash.value = null
+  if (!choice.insert) {
+    draft.value = ""
+    void nextTick(resize)
+    void choice.run?.("")
+    return
+  }
+  const text = `${choice.display} `
+  draft.value = text
+  void nextTick(() => {
+    resize()
+    const el = textarea.value
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(text.length, text.length)
+  })
+}
+
+/**
+ * Keys the command menu claims.
+ *
+ * While it is open the caret only ever moves through the list: Enter picks a
+ * row instead of sending, and PageUp, PageDown, Home and End walk it. Escape
+ * closes the menu and leaves the text alone.
+ */
+function handleMenuKey(event: KeyboardEvent): boolean {
+  switch (event.key) {
+    case "ArrowDown":
+      moveSelection(1)
+      break
+    case "ArrowUp":
+      moveSelection(-1)
+      break
+    case "PageDown":
+      moveSelection(SLASH_MENU_ROWS)
+      break
+    case "PageUp":
+      moveSelection(-SLASH_MENU_ROWS)
+      break
+    case "Home":
+      slashSelected.value = 0
+      break
+    case "End":
+      slashSelected.value = Math.max(0, slashItems.value.length - 1)
+      break
+    case "Tab":
+      acceptCommand()
+      break
+    case "Enter":
+      if (event.shiftKey || event.isComposing) return false
+      acceptCommand()
+      break
+    case "Escape":
+      slash.value = null
+      break
+    default:
+      return false
+  }
+  event.preventDefault()
+  return true
+}
+
+/** Rename the open conversation, for `/rename`. */
+async function renameCurrent(title: string) {
+  const sessionID = app.sessions.currentID.value
+  if (!sessionID || !title.trim()) return
+  await renameSession(sessionID, title.trim(), directory.value)
+}
+
+/* ------------------------------- composer -------------------------------- */
 
 watch(draft, () => nextTick(resize))
 watch(composerFocusRequest, () => nextTick(() => textarea.value?.focus()))
@@ -99,9 +305,58 @@ function onDrop(event: DragEvent) {
 }
 
 async function submit() {
+  // While the menu is open, sending picks a row — the same thing Enter does —
+  // so clicking the arrow beside a half-typed command completes it rather than
+  // mailing `/mod` to the model.
+  if (menuOpen.value) {
+    acceptCommand()
+    return
+  }
+
   const text = draft.value
   const hasFiles = attachments.value.length > 0
   if ((!text.trim() && !hasFiles) || sending.value || answering.value) return
+
+  const files = attachments.value.map((item) => ({
+    type: "file" as const,
+    mime: item.mime,
+    url: item.url,
+    filename: item.filename,
+  }))
+
+  const parsed = parseSlash(text)
+
+  // A command of this app's own that takes an argument, as the TUI's
+  // `/rename <title>` does. It never becomes a prompt: the action owns the
+  // text after the name.
+  const own = parsed
+    ? slashRows.value.find((row) => row.display === `/${parsed.name}` && row.insert && row.run)
+    : undefined
+  if (parsed && own) {
+    draft.value = ""
+    clearAttachments()
+    await nextTick(resize)
+    await own.run?.(parsed.arguments)
+    return
+  }
+
+  // A command the server knows. It expands the template itself, so the name
+  // and the argument string are all that travel — and a name the server has
+  // never heard of falls through to an ordinary prompt, which is what keeps a
+  // mistyped `/modles` from being swallowed.
+  if (parsed && commands.value.some((command) => command.name === parsed.name)) {
+    const pending = [...attachments.value]
+    draft.value = ""
+    clearAttachments()
+    await nextTick(resize)
+    try {
+      await runCommand(parsed.name, parsed.arguments, files)
+    } catch {
+      draft.value = text
+      attachments.value = pending
+    }
+    return
+  }
 
   // A pending question claims the line: replying to it is what frees the parked
   // run, and the card clears itself once the server has the answer. Attachments
@@ -123,12 +378,6 @@ async function submit() {
     return
   }
 
-  const files = attachments.value.map((item) => ({
-    type: "file" as const,
-    mime: item.mime,
-    url: item.url,
-    filename: item.filename,
-  }))
   const pending = [...attachments.value]
 
   draft.value = ""
@@ -148,6 +397,7 @@ async function stop() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (menuOpen.value && handleMenuKey(event)) return
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void submit()
@@ -178,6 +428,12 @@ function onKeydown(event: KeyboardEvent) {
       </div>
 
       <div class="input-wrap">
+        <SlashMenu
+          v-if="menuOpen"
+          :items="slashItems"
+          :selected="slashSelected"
+          @pick="acceptCommand"
+        />
         <textarea
           ref="textarea"
           v-model="draft"
@@ -185,6 +441,10 @@ function onKeydown(event: KeyboardEvent) {
           rows="1"
           spellcheck="false"
           :placeholder="placeholder"
+          @input="syncMenu"
+          @click="syncMenu"
+          @keyup="syncMenu"
+          @blur="slash = null"
           @keydown="onKeydown"
           @paste="onPaste"
         />
