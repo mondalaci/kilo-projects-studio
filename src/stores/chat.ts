@@ -82,8 +82,23 @@ function mergeMessages(current: SessionMessage[], fetched: SessionMessage[]): Se
   return [...byID.values()].sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
 }
 
-function sortMessages() {
-  messages.value = [...messages.value].sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
+/**
+ * Add a message the user just sent, in front of the turn it starts.
+ *
+ * `session.step.started` can beat the prompt response back to the client, so
+ * this turn's assistant step is often already in the list — and a streamed step
+ * sits at its end. Appending the message after it would print the message under
+ * the step it started, putting the answer above the question; the step is not
+ * complete until the turn ends, so an unfinished trailing step is this one.
+ */
+function addUserMessage(message: UserMessage) {
+  let at = messages.value.length
+  while (at > 0) {
+    const previous = messages.value[at - 1]
+    if (previous.type !== "assistant" || previous.time?.completed) break
+    at--
+  }
+  messages.value = [...messages.value.slice(0, at), message, ...messages.value.slice(at)]
 }
 
 function findMessage(id: string) {
@@ -118,8 +133,11 @@ function ensureAssistant(id: string, base: Partial<AssistantMessage> = {}): Assi
     time: { created: base.time?.created ?? Date.now() },
     ...base,
   }
+  // Appended rather than sorted: a step arriving on the stream belongs after
+  // everything loaded, and its `started` stamp comes from the server's clock
+  // while a message the user just sent is stamped locally. Sorting the two can
+  // put the step above the message it is answering.
   messages.value = [...messages.value, created]
-  sortMessages()
   return created
 }
 
@@ -278,11 +296,30 @@ export function useChat() {
     }
   }
 
+  /**
+   * Drop the questions holding this session, server-side and locally.
+   *
+   * A run parked on a question is idle as far as the server is concerned, so the
+   * question itself is what holds it: withdrawing makes the tool call return and
+   * the agent resume. The matching `form.cancelled` event is not guaranteed to
+   * arrive — an interrupted turn emits none — so the local list is cleared here
+   * rather than left to the stream.
+   */
+  async function withdrawForms(client: ServerClient, sessionID: string, directory?: string) {
+    const asks = forms.value.filter((form) => form.sessionID === sessionID)
+    if (!asks.length) return
+    await Promise.allSettled(asks.map((form) => client.cancelForm(sessionID, form.id, { directory })))
+    forms.value = forms.value.filter((form) => form.sessionID !== sessionID)
+  }
+
   async function send(client: ServerClient, sessionID: string, input: SendInput, directory?: string) {
     sending.value = true
     error.value = null
     scrollToBottomRequest.value++
     try {
+      // A message answers the question that was still on screen: the card is
+      // discarded as soon as it is sent, never left behind the new message.
+      await withdrawForms(client, sessionID, directory)
       // v2 sets the model/agent on the session, then sends a plain prompt.
       if (input.model) await client.setModel(sessionID, input.model, { directory })
       if (input.agent) await client.setAgent(sessionID, input.agent, { directory })
@@ -311,7 +348,7 @@ export function useChat() {
         })),
         time: { created: Date.now() },
       }
-      messages.value = [...messages.value, optimistic]
+      addUserMessage(optimistic)
       status.value = { type: "busy" }
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
@@ -328,16 +365,14 @@ export function useChat() {
    * returns, and the agent resumes — and interrupt only what still runs after.
    */
   async function abort(client: ServerClient, sessionID: string, directory?: string) {
-    const asks = forms.value.filter((form) => form.sessionID === sessionID)
     const requests = permissions.value.filter((request) => request.sessionID === sessionID)
     await Promise.allSettled([
-      ...asks.map((form) => client.cancelForm(sessionID, form.id, { directory })),
       ...requests.map((request) =>
         client.replyPermission(sessionID, request.id, "reject", { directory }),
       ),
+      withdrawForms(client, sessionID, directory),
     ])
     // Clear locally too, in case the matching events arrive late or not at all.
-    forms.value = forms.value.filter((form) => form.sessionID !== sessionID)
     permissions.value = permissions.value.filter((request) => request.sessionID !== sessionID)
     try {
       await client.interrupt(sessionID, { directory })
