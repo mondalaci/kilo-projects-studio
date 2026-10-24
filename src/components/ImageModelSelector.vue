@@ -81,13 +81,15 @@ watch(open, async (value) => {
   <ComboboxRoot v-model="selectedKey" v-model:open="open" :ignore-filter="true" class="opencode-image-root">
     <ComboboxAnchor
       class="opencode-image-anchor"
-      :class="{ 'is-set': !!selectedImageModel }"
+      :class="{ 'is-set': !!selectedImageModel, 'is-open': open }"
       :title="selectedImageModel ? `Image model: ${selectedLabel}` : 'Image model: default'"
     >
-      <ImageIcon :size="14" class="opencode-image-icon" />
-      <span v-if="selectedImageModel" class="opencode-image-label">{{ selectedLabel }}</span>
-      <ComboboxTrigger class="opencode-image-chevron" aria-label="Select image model">
-        <ChevronDown :size="14" />
+      <!-- The trigger fills the pill, so the whole button opens the menu; the
+           chevron is only an affordance, not the sole click target. -->
+      <ComboboxTrigger class="opencode-image-trigger" aria-label="Select image model">
+        <ImageIcon :size="14" class="opencode-image-icon" />
+        <span v-if="selectedImageModel" class="opencode-image-label">{{ selectedLabel }}</span>
+        <ChevronDown :size="14" class="opencode-image-chevron" />
       </ComboboxTrigger>
     </ComboboxAnchor>
 
@@ -143,10 +145,7 @@ watch(open, async (value) => {
 .opencode-image-anchor {
   position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
   height: 32px;
-  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--bg-elevated);
@@ -158,7 +157,7 @@ watch(open, async (value) => {
   color: var(--text);
 }
 .opencode-image-anchor:focus-within,
-.opencode-image-anchor[data-state="open"] {
+.opencode-image-anchor.is-open {
   border-color: var(--accent);
 }
 /* A chosen model is a setting worth showing; the unset state is just the icon. */
@@ -180,15 +179,26 @@ watch(open, async (value) => {
   white-space: nowrap;
   font-size: 13px;
 }
-.opencode-image-chevron {
+/* Fills the anchor so a click anywhere on the pill toggles the menu. */
+.opencode-image-trigger {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  color: inherit;
-  background: transparent;
+  gap: 6px;
+  height: 100%;
+  padding: 0 6px;
   border: none;
-  padding: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.opencode-image-trigger:focus-visible {
+  outline: none;
+}
+.opencode-image-chevron {
   flex: none;
+  color: inherit;
 }
 .opencode-image-menu {
   width: 460px;
