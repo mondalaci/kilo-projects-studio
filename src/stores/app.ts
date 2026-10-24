@@ -178,6 +178,25 @@ export function useApp() {
     requestComposerFocus()
   }
 
+  /**
+   * Move to the next (`+1`) or previous (`-1`) project in the sidebar's order,
+   * wrapping around at either end. It behaves like clicking the row: the
+   * project's newest conversation opens, and the composer takes focus.
+   */
+  async function cycleProject(delta: 1 | -1) {
+    const list = projects.entries.value
+    if (!list.length) return
+    const index = list.findIndex((entry) => entry.directory === server.directory.value)
+    if (index === -1) {
+      await openProject(list[delta > 0 ? 0 : list.length - 1].directory)
+      return
+    }
+    const target = list[(index + delta + list.length) % list.length].directory
+    // A single project wraps onto itself; reopening it would only reset focus.
+    if (target === server.directory.value) return
+    await openProject(target)
+  }
+
   async function newChat() {
     const client = connection.client.value
     if (!client) return null
@@ -357,6 +376,7 @@ export function useApp() {
     selectSession,
     switchProject,
     openProject,
+    cycleProject,
     openSessionByID,
     openInitialSession,
     newChat,

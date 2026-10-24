@@ -30,7 +30,7 @@ const tray = useTray()
 const { current, currentID } = app.sessions
 const { error, messages, isBusy, awaitingUser } = app.chat
 const { models, selectedModelInfo } = app.server
-const { newChat } = app
+const { newChat, cycleProject } = app
 
 /** The change row whose diff is open; while set, the diff replaces the chat. */
 const activeDiff = git.selection
@@ -216,6 +216,14 @@ function onKeyDown(event: KeyboardEvent) {
   // reload and Ctrl+P print are not wanted here, and with no application menu
   // there is no accelerator keeping them alive.
   if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+    // Ctrl+PageDown / Ctrl+PageUp walk the projects in sidebar order, the way the
+    // same pair walks tabs elsewhere. A handler closer to the target (the
+    // composer's slash menu) may already have claimed the key, so leave it be.
+    if (!event.defaultPrevented && (event.code === "PageDown" || event.code === "PageUp")) {
+      event.preventDefault()
+      void cycleProject(event.code === "PageDown" ? 1 : -1)
+      return
+    }
     if (event.code === "KeyR") {
       event.preventDefault()
       startFilter("projects")
