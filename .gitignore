@@ -6,3 +6,7 @@ dist-ssr
 .vite
 search-server/data
 public/opencode-projects-studio.json
+# Intermediate logo versions: kept on disk for now, never committed.
+build/logo-options/
+build/logo-ocp*
+scripts/gen-logo.mjs
