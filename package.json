@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "icon": "convert -background none build/icon.svg -resize 512x512 build/icon.png && convert -background none build/tray.svg -resize 64x64 build/tray.png",
+    "icon": "convert -background none build/icon-source.png -resize 512x512 build/icon.png && convert build/icon.png -resize 64x64 build/tray.png && cp build/icon.png public/icon.png",
     "app": "electron .",
     "app:dev": "node scripts/dev.mjs",
     "app:build": "vite build && electron ."

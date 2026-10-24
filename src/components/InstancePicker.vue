@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue"
 import { ArrowRight, Plus, RefreshCw, Server, KeyRound } from "lucide-vue-next"
 import Spinner from "./Spinner.vue"
+import iconUrl from "../../build/icon.png"
 import WindowControls from "./WindowControls.vue"
 import { normalizeOrigin, type InstanceInfo } from "@/api/discovery"
 import { useApp } from "@/stores/app"
@@ -65,7 +66,7 @@ async function manualConnect() {
   <div class="picker">
     <div class="panel">
       <header class="head drag-region">
-        <div class="logo" aria-hidden="true">K</div>
+        <img class="logo" :src="iconUrl" alt="" />
         <div>
           <h1>OpenCode Projects Studio</h1>
           <p>Connect to a Kilo Code or opencode server</p>
@@ -183,15 +184,11 @@ async function manualConnect() {
   margin-left: auto;
 }
 .logo {
+  /* The app icon itself, at the picker's size. */
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-text);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 22px;
+  display: block;
+  flex: none;
 }
 h1 {
   margin: 0;

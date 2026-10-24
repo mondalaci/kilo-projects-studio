@@ -128,11 +128,15 @@ electron/
   git.cjs            Git plumbing: repo detection, status, diff, stage/unstage
   static-server.cjs  Loopback static server for the production build
 build/
-  icon.svg           The Kilo mark, shared with the sidebar logo and favicon
-  icon.png           512×512 window/taskbar icon, rasterized from icon.svg
-  tray.svg           Monochrome tray glyph, matching what the app draws
-  tray.png           64×64 tray base icon (panels draw a ~20px slot, so a larger
-                     source is downscaled and stays crisp on HiDPI)
+  icon-source.png    1024×1024 master of the app icon: opencode's own "oc"
+                     letters over the folder, composed from the two sources
+  icon.png           512×512 app icon, resized from icon-source.png — the file
+                     the window, the tray, the sidebar and the tab all use
+  tray.png           64×64 tray base icon: the same icon, resized (panels draw a
+                     ~20px slot, so a larger source downscales crisply on HiDPI)
+public/
+  icon.png           the same 512px icon, for the tab favicon (written by
+                     `npm run icon`; the tab cannot reach outside the web root)
 scripts/
   dev.mjs            Starts Vite, waits for the port, then launches Electron
 src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
@@ -167,20 +171,28 @@ src/                 Renderer (Vue 3 app inherited from kilo-web-chat)
 
 ### App icon
 
-The application icon is the Kilo mark — the same rounded-square "K" as the logo
-in the sidebar's top-left corner and as `public/favicon.svg`. `build/icon.png` is
-the window, taskbar and dock icon; `build/icon.svg` is the vector source.
+The application icon is opencode's own "oc" letters over a folder:
+`build/icon-source.png` is the 1024px master, composed from those two pieces, and
+`build/icon.png` is the 512px window, taskbar and dock icon cut from it. The
+master is the file to edit — nothing generates it.
 
-To regenerate the PNGs after editing the SVG (needs ImageMagick on `PATH`):
+Everywhere the app shows its logo it shows that same file. The sidebar header and
+the instance picker import `build/icon.png` directly, the tab loads `public/icon.png`
+(the copy `npm run icon` writes, since a page cannot reach outside the web root),
+the tray starts from `build/tray.png`, and the busy-tab spinner in
+`src/stores/favicon.ts` draws the icon under its arc. There is no second drawing of
+the mark to keep in step: edit `build/icon-source.png`, run `npm run icon`, and the
+window, the dock, the tray, the sidebar, the picker and the tab all follow.
+
+To regenerate the PNGs (needs ImageMagick on `PATH`):
 
 ```bash
 npm run icon
 ```
 
-The SVG is the single source of truth, so a packaged build can derive whatever
-else a platform wants from it (`.ico` for Windows, `.icns` for macOS). `build/`
-is also electron-builder's default resources directory, so `icon.png` and its
-derived siblings are picked up automatically if packaging is added later.
+`build/` is also electron-builder's default resources directory, so `icon.png`
+and its derived siblings are picked up automatically if packaging is added
+later.
 
 ### Why the renderer is served over HTTP
 
@@ -250,7 +262,7 @@ needs you without the window in front. It rolls up in two steps:
 3. **Tray** — the same precedence across projects, plus the counts.
 
 The badge is baked into the icon bitmap, since trays have no numeric-badge API:
-a monochrome "K" — so it sits with the panel's own icons rather than standing out
+the mark's cog in monochrome — so it sits with the panel's own icons rather than standing out
 as a coloured tile — carrying a state dot with the number of *projects* needing
 attention (blocked, or done and not yet opened). The tooltip carries the
 per-project breakdown. The glyph is drawn white with a hairline dark edge so it

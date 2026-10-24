@@ -2,6 +2,7 @@
 import { computed, ref } from "vue"
 import { Archive, MessageSquarePlus, Search } from "lucide-vue-next"
 import ShortcutBadge from "./ShortcutBadge.vue"
+import iconUrl from "../../build/icon.png"
 import ProjectsPanel from "./ProjectsPanel.vue"
 import SidebarSearch from "./SidebarSearch.vue"
 import ArchivePanel from "./ArchivePanel.vue"
@@ -23,7 +24,7 @@ const projectCount = computed(() => app.projects.entries.value.length)
     <ArchivePanel v-else-if="archiveOpen" />
     <template v-else>
       <header class="head drag-region">
-        <span class="logo">K</span>
+        <img class="logo" :src="iconUrl" alt="" />
         <span class="brand">Projects<ShortcutBadge placement="below" modifier="ctrl" key-label="R" /></span>
         <span class="brand-count" :title="`${projectCount} projects`">{{ projectCount }}</span>
         <button class="icon" title="Search conversations (Alt+F)" @click="openSearch()">
@@ -68,16 +69,12 @@ const projectCount = computed(() => app.projects.entries.value.length)
   padding: 0 10px;
 }
 .logo {
+  /* The app icon itself — the same file the window and the tray use — so the
+     header carries no second drawing of the logo to keep in step. */
   flex: none;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: var(--accent-text);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 14px;
+  display: block;
 }
 .brand {
   position: relative;

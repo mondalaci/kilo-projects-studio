@@ -30,12 +30,12 @@ const { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell } = electr
 
 const ROOT = path.join(__dirname, "..")
 const DIST = path.join(ROOT, "dist")
-/** The Kilo mark, shared with the sidebar logo and the site favicon. */
+/** The app icon: the "OCP studio" lockup, cut from build/icon-source.png. */
 const ICON = path.join(ROOT, "build", "icon.png")
 /**
- * Tray-sized version of the same mark. Linux panels expect roughly 16-24px and
- * some hosts (Cinnamon's tray applet among them) show nothing at all for a
- * full-size window icon.
+ * Tray-sized version of the mark — the icon's cog alone. Linux panels expect
+ * roughly 16-24px and some hosts (Cinnamon's tray applet among them) show
+ * nothing at all for a full-size window icon.
  */
 const TRAY_ICON = path.join(ROOT, "build", "tray.png")
 const DEV_URL = process.env.KPS_DEV_URL || ""

@@ -104,11 +104,12 @@ export function useTray() {
   })
 
   /** Draw and push the current rollup. */
-  function push() {
+  async function push() {
     if (!bridge?.tray) return
     const rollup = state.trayRollup.value
-    void bridge.tray.update({
-      dataURL: trayIconDataURL(rollup.state as ConversationState, rollup.attention),
+    const dataURL = await trayIconDataURL(rollup.state as ConversationState, rollup.attention)
+    await bridge.tray.update({
+      dataURL,
       tooltip: tooltip.value,
       menu: menu.value,
       muted: muted.value,
