@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue"
-import { User } from "lucide-vue-next"
+import { computed, ref } from "vue"
+import { ChevronRight, User } from "lucide-vue-next"
 import type { AssistantBlock, AssistantReasoningBlock, AssistantToolBlock, SessionMessage } from "@/api/types"
 import { formatCost, formatDateTime, formatTokens } from "@/utils/format"
 import { composedMessage } from "@/utils/compose"
@@ -27,15 +27,38 @@ const hidden = computed(() =>
   ["idle", "model-switched", "agent-switched", "location-switched"].includes(props.message.type),
 )
 
-/** Notes that are not part of the conversation flow (system, switches, idle). */
+/** Notes that are not part of the conversation flow (switches, idle, shell). */
 const note = computed<string | null>(() => {
   const message = props.message
-  if (message.type === "system" || message.type === "synthetic") return message.text
   if (message.type === "skill") return `Skill: ${message.name}`
   if (message.type === "shell") return `$ ${message.command}`
   if (message.type === "compaction") return message.status === "running" ? "Compacting…" : `Compaction (${message.reason})`
   return null
 })
+
+/**
+ * A server-authored notice: a `system` or `synthetic` message.
+ *
+ * Most of them are one line. The harness also delivers whole documents this way,
+ * though — an instruction update such as the Code Mode tool catalog arrives as a
+ * `system` message of several kilobytes — and printing one in the note's single
+ * line turns the conversation into a wall of raw markdown. A long one folds into
+ * a labelled block that opens on demand; a short one still reads as it always did.
+ */
+const notice = computed(() => {
+  const message = props.message
+  if (message.type !== "system" && message.type !== "synthetic") return null
+  const text = message.text ?? ""
+  return {
+    text,
+    label: message.description || "System notice",
+    preview: text.split("\n")[0]?.trim() ?? "",
+    foldable: text.length > 140 || text.includes("\n"),
+  }
+})
+
+/** A folded notice stays closed until it is asked for. */
+const noticeOpen = ref(false)
 
 const errorMessage = computed(() => {
   if (props.message.type !== "assistant" || !props.message.error) return null
@@ -88,6 +111,20 @@ function isCompose(block: AssistantToolBlock): boolean {
 <template>
   <template v-if="!hidden">
     <div v-if="note" class="note">{{ note }}</div>
+
+    <template v-else-if="notice">
+      <div v-if="!notice.foldable" class="note">{{ notice.text }}</div>
+      <div v-else class="notice">
+        <button class="notice-head" :aria-expanded="noticeOpen" @click="noticeOpen = !noticeOpen">
+          <ChevronRight :size="13" class="notice-chevron" :class="{ open: noticeOpen }" />
+          <span class="notice-label">{{ notice.label }}</span>
+          <span class="notice-preview">{{ notice.preview }}</span>
+        </button>
+        <!-- Shown as it arrived: this is the text the model was handed, down to
+             its markdown furniture. -->
+        <div v-if="noticeOpen" class="notice-body">{{ notice.text }}</div>
+      </div>
+    </template>
 
     <div v-else class="message" :class="isUser ? 'user' : 'assistant'">
     <div v-if="!isUser" class="avatar" aria-hidden="true">
@@ -160,6 +197,62 @@ function isCompose(block: AssistantToolBlock): boolean {
   color: var(--text-faint);
   font-size: 12px;
   font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* A notice long enough to be a document: one line that opens onto the whole
+   text, so an instruction update does not push the conversation off screen. */
+.notice {
+  max-width: var(--content-width);
+  margin: 6px auto;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.notice-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.notice-head:hover {
+  color: var(--text-muted);
+}
+.notice-chevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+.notice-chevron.open {
+  transform: rotate(90deg);
+}
+.notice-label {
+  flex: none;
+  color: var(--text-muted);
+}
+.notice-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.notice-body {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 12px 9px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
